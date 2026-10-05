@@ -1,0 +1,13 @@
+{
+  "title": "Higher EdTech - Comparison",
+  "state_ids": [
+    "2193f61131",
+    "ca8c598855"
+  ],
+  "description": "QA AI lowers bug count; fewer bugs lower churn and CPM after 180 days.",
+  "id": "f9f614ce38",
+  "compare_day": 1100,
+  "intervention_label": "QA AI",
+  "target_label": "higher education companies",
+  "created": "2026-10-03 01:38:38 UTC"
+}

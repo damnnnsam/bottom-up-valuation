@@ -1,0 +1,206 @@
+{
+  "title": "Higher EdTech - State 2 (After Intervention)",
+  "description": "Same business with QA AI: fewer bugs lowers churn and CPM from day 181, QA team shrinks from day 91.",
+  "id": "ca8c598855",
+  "time_span": 3000,
+  "discount_rate": 0.09,
+  "tax_rate": 0.22,
+  "projection_period": 3000,
+  "shares": 1000000,
+  "starting_cash": 0.0,
+  "created": "2026-10-03 01:38:38 UTC",
+  "offers": [
+    {
+      "name": "Mid-Market Offer",
+      "payments": [
+        [
+          0,
+          100.0
+        ],
+        [
+          30,
+          90.396
+        ],
+        [
+          60,
+          81.7144
+        ],
+        [
+          90,
+          73.8665
+        ],
+        [
+          120,
+          66.7724
+        ],
+        [
+          150,
+          60.3596
+        ],
+        [
+          180,
+          54.5626
+        ],
+        [
+          210,
+          49.3224
+        ],
+        [
+          240,
+          44.5855
+        ],
+        [
+          270,
+          40.3035
+        ],
+        [
+          300,
+          36.4328
+        ],
+        [
+          330,
+          32.9338
+        ],
+        [
+          360,
+          29.7708
+        ]
+      ],
+      "cost_to_fulfill": 0.0,
+      "generator": {
+        "kind": "subscription",
+        "price": 100.0,
+        "every_days": 30,
+        "churn": 0.09604,
+        "periods": 13
+      }
+    },
+    {
+      "name": "Mid-Market Offer (After Intervention)",
+      "payments": [
+        [
+          0,
+          100.0
+        ],
+        [
+          30,
+          94.508
+        ],
+        [
+          60,
+          89.3176
+        ],
+        [
+          90,
+          84.4123
+        ],
+        [
+          120,
+          79.7764
+        ],
+        [
+          150,
+          75.3951
+        ],
+        [
+          180,
+          71.2544
+        ],
+        [
+          210,
+          67.3411
+        ],
+        [
+          240,
+          63.6427
+        ],
+        [
+          270,
+          60.1474
+        ],
+        [
+          300,
+          56.8441
+        ],
+        [
+          330,
+          53.7223
+        ],
+        [
+          360,
+          50.7718
+        ]
+      ],
+      "cost_to_fulfill": 0.0,
+      "generator": {
+        "kind": "subscription",
+        "price": 100.0,
+        "every_days": 30,
+        "churn": 0.05492,
+        "periods": 13
+      }
+    }
+  ],
+  "events": [
+    {
+      "title": "Paid Funnel",
+      "offer": "Mid-Market Offer",
+      "channel": "Paid Advertising",
+      "start_day": 0,
+      "end_day": 180,
+      "spend_per_day": 2000.0,
+      "cpm": 25.0,
+      "ctr": 0.02,
+      "lead_to_view": 0.1,
+      "sale_to_lead": 0.07,
+      "sales_cycle_days": 14
+    },
+    {
+      "title": "Paid Funnel (After Intervention)",
+      "offer": "Mid-Market Offer (After Intervention)",
+      "channel": "Paid Advertising",
+      "start_day": 181,
+      "end_day": 700,
+      "spend_per_day": 2000.0,
+      "cpm": 20.0,
+      "ctr": 0.02,
+      "lead_to_view": 0.1,
+      "sale_to_lead": 0.07,
+      "sales_cycle_days": 14
+    }
+  ],
+  "expenses": [
+    {
+      "title": "Customer Support Agents",
+      "description": "",
+      "start_day": 0,
+      "end_day": 730,
+      "amount_per_day": 98.6,
+      "employee": false
+    },
+    {
+      "title": "QA Engineers",
+      "description": "3-4 QA Engineers",
+      "start_day": 0,
+      "end_day": 90,
+      "amount_per_day": 158.0,
+      "employee": false
+    },
+    {
+      "title": "QA Engineers (After Intervention)",
+      "description": "1-2 QA Engineers",
+      "start_day": 91,
+      "end_day": 730,
+      "amount_per_day": 55.0,
+      "employee": false
+    },
+    {
+      "title": "Developers",
+      "description": "10-15 developers",
+      "start_day": 0,
+      "end_day": 730,
+      "amount_per_day": 841.0,
+      "employee": true
+    }
+  ]
+}
