@@ -58,6 +58,17 @@ def run(s: State, at_day: int | None = None):
     return _run(json.dumps(state_to_dict(s), sort_keys=True, default=str), at_day)
 
 
+def short_names(titles: list) -> list:
+    """Drop the shared "Client - " prefix so labels say what differs."""
+    if len(titles) < 2:
+        return list(titles)
+    parts = [t.split(" - ") for t in titles]
+    k = 0
+    while all(len(p) > k + 1 for p in parts) and len({p[k] for p in parts}) == 1:
+        k += 1
+    return [" - ".join(p[k:]) for p in parts]
+
+
 # ── Navigation ────────────────────────────────────────────────────────
 
 def qp(name: str, default=None):
@@ -448,7 +459,7 @@ def cash_chart(named, key):
     for i, (name, r) in enumerate(named):
         fig.add_trace(go.Scatter(x=r.days, y=r.cash_balance, mode="lines", name=name,
                                  line=dict(color=PALETTE[i % len(PALETTE)], width=2)))
-    fig.add_hline(y=0, line=dict(color=RED, width=1))
+    fig.add_hline(y=0, line=dict(color="#cbd5e1", width=1))
     chart(fig, "Cash Balance", 340, money_axis=True, key=key)
 
 
@@ -476,11 +487,11 @@ def monthly_cash_chart(r, key: str) -> None:
     m = len(r.days) // 30
     fig = go.Figure()
     mo = lambda arr: [float(arr[i * 30:(i + 1) * 30].sum()) for i in range(m)]
-    fig.add_trace(go.Bar(x=list(range(1, m + 1)), y=mo(r.cash_collected_total), name="Cash collected", marker_color=NAVY))
-    fig.add_trace(go.Bar(x=list(range(1, m + 1)), y=[-x for x in mo(r.cost_total)], name="Costs", marker_color=RED))
+    fig.add_trace(go.Bar(x=list(range(1, m + 1)), y=mo(r.cash_collected_total), name="Cash collected", marker_color="#1e293b"))
+    fig.add_trace(go.Bar(x=list(range(1, m + 1)), y=[-x for x in mo(r.cost_total)], name="Costs", marker_color="#cbd5e1"))
     fig.add_trace(go.Scatter(x=list(range(1, m + 1)), y=mo(r.free_cash_flow), name="Free cash flow",
-                             line=dict(color=GOLD, width=2)))
-    fig.update_layout(barmode="relative")
+                             line=dict(color="#2563eb", width=2)))
+    fig.update_layout(barmode="relative", bargap=0.35)
     chart(fig, "Cash Collected and Costs per Month", 340, money_axis=True, key=key, xtitle="Month")
 
 
@@ -1050,6 +1061,10 @@ def render_editor(client: str, sid: str) -> None:
 
 # ── Comparison ────────────────────────────────────────────────────────
 
+LOWER_IS_BETTER = {"CAC (fully loaded, 12 months)", "CAC ratio", "CAC payback (months)", "Cash needed",
+                   "Time to profitability (days)", "Time to self-fund (days)"}
+NEUTRAL = {"Total marketing spend", "Total tax"}  # more is neither good nor bad by itself
+
 METRIC_ROWS = [
     ("Total DCF after tax", lambda s, r, k, v: v.dcf_cumulative, money),
     ("Enterprise value (DCF)", lambda s, r, k, v: v.enterprise_value_dcf, money),
@@ -1080,7 +1095,8 @@ def render_comparison(client: str, comp: Comparison, share: bool) -> None:
         st.warning("This comparison has no states.")
         return
     outs = [run(s) for s in states]
-    named = [(s.title, o[0]) for s, o in zip(states, outs)]
+    short = short_names([s.title for s in states])
+    named = [(nm, o[0]) for nm, o in zip(short, outs)]
     page_title(comp.title, comp.description)
     day = int(comp.compare_day)
 
@@ -1107,16 +1123,21 @@ def render_comparison(client: str, comp: Comparison, share: bool) -> None:
                 go_to(client=client)
             day = int(nd)
 
+    msg = ""
     if len(named) >= 2:
-        base = named[0][1]
-        cols = st.columns(len(named) - 1)
-        for i, (name, r) in enumerate(named[1:]):
+        base_name, base = named[0]
+        heads = []
+        for name, r in named[1:]:
             d = min(day, len(r.days) - 1, len(base.days) - 1)
             diff = float(r.cum_dcf[d] - base.cum_dcf[d])
-            cols[i].markdown(
-                f'<div class="c-summary">Difference in total discounted cash flow after tax, day {d:,}'
-                f'<div class="val">{money(diff)}</div><div class="sub">{esc(name)} compared with '
-                f'{esc(named[0][0])}</div></div>', unsafe_allow_html=True)
+            b0 = float(base.cum_dcf[d])
+            cls = "pos" if diff > 0 else ("neg" if diff < 0 else "")
+            pill = (f'<span class="c-pill {cls}">{"+" if diff > 0 else ""}{diff / abs(b0) * 100:,.1f}%</span>'
+                    if abs(b0) > 1 else "")
+            heads.append(f'<div class="c-head"><div class="lbl"><b>{esc(name)}</b> vs {esc(base_name)}</div>'
+                         f'<div class="val {cls}">{"+" if diff > 0 else ""}{money_short(diff)}{pill}</div>'
+                         f'<div class="sub">Total discounted cash flow after tax at day {d:,}</div></div>')
+        st.markdown('<div class="c-heads">' + "".join(heads) + "</div>", unsafe_allow_html=True)
         if not share:
             r1 = named[1][1]
             d = min(day, len(r1.days) - 1, len(base.days) - 1)
@@ -1125,8 +1146,6 @@ def render_comparison(client: str, comp: Comparison, share: bool) -> None:
             msg = (f"We specialize in helping {comp.target_label or '[target segment]'}. Here's a model showing a "
                    f"{money_short(diff)} discounted future cash flow benefit after {d:,} days{using}. "
                    f"Here's a link to the model: {share_url(client, comparison=comp.id)}")
-            with st.expander("Outbound message"):
-                st.text_area("Message", msg, height=100, key=f"msg_{comp.id}", label_visibility="collapsed")
 
     sec = st.segmented_control("Section", ["Comparison", "Graphs", "States"], default="Comparison",
                                key=f"csec_{comp.id}", label_visibility="collapsed") or "Comparison"
@@ -1167,20 +1186,21 @@ def render_comparison(client: str, comp: Comparison, share: bool) -> None:
                 G.difference_charts(named, pick, mode, f"cdd_{comp.id}", compare_day=day)
         return
 
-    heads = ["Metric"] + [s.title for s in states] + (
-        ["Change"] if len(states) == 2 else [f"Change ({i + 2})" for i in range(len(states) - 1)])
+    heads = ["Metric"] + short + (
+        ["Change"] if len(states) == 2 else [f"Δ {nm}" for nm in short[1:]])
     rows = []
     for label, fn, fmt in METRIC_ROWS:
         vals = [fn(s, r, k, v) for s, (r, k, v) in zip(states, outs)]
         deltas = []
         for x in vals[1:]:
             ok = np.isfinite(x) and np.isfinite(vals[0]) and "days" not in label
-            deltas.append(signed(x - vals[0], fmt if fmt in (money,) else (lambda z: num(round(z, 2)))) if ok else "–")
+            deltas.append(signed(x - vals[0], fmt if fmt in (money,) else (lambda z: num(round(z, 2 if abs(z) < 100 else 0))),
+                                 lower_is_better=None if label in NEUTRAL else label in LOWER_IS_BETTER) if ok else "–")
         rows.append([esc(label)] + [fmt(x) for x in vals] + deltas)
     card("Key Metrics", table(heads, rows, num_cols=set(range(1, len(heads)))))
     vs = [validation_summary(s) for s in states]
     if any(vs):
-        card("Validation", table(["State", "Marketing rows"], [[esc(s.title), esc(x or "–")] for s, x in zip(states, vs)]))
+        card("Validation", table(["State", "Marketing rows"], [[esc(nm), esc(x or "–")] for nm, x in zip(short, vs)]))
 
     a, b = st.columns(2, gap="medium")
     with a:
@@ -1191,6 +1211,9 @@ def render_comparison(client: str, comp: Comparison, share: bool) -> None:
         if len(named) >= 2:
             G.difference_charts(named, "cum_dcf", "Daily", f"cdcfd_{comp.id}", compare_day=day)
         G.values_chart(named, "cash_collected_total", "Monthly", f"ccc_{comp.id}", compare_day=day)
+    if msg:
+        with st.expander("Message template"):
+            st.text_area("Message", msg, height=100, key=f"msg_{comp.id}", label_visibility="collapsed")
 
 
 # ── Client home ───────────────────────────────────────────────────────

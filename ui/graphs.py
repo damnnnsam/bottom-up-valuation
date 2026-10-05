@@ -131,7 +131,7 @@ def values_chart(named: list, key: str, mode: str, ckey: str, compare_day=None, 
     if compare_day is not None:
         fig.add_vline(x=(compare_day // 30) if mode == "Monthly" else compare_day, line=dict(color="#adb5bd", dash="dash"))
     if is_money and kind == "stock":
-        fig.add_hline(y=0, line=dict(color=RED, width=1))
+        fig.add_hline(y=0, line=dict(color="#cbd5e1", width=1))
     chart(fig, _title(key, mode), height, money_axis=is_money, key=ckey,
           xtitle="Month" if mode == "Monthly" else "Days", zero=True)
 
@@ -207,7 +207,7 @@ def by_channel_chart(r, ckey: str, mode: str) -> None:
 def picker(ckey: str, default_view: str = "Overview", views=None) -> tuple:
     """View and mode selectors. Returns (view name, mode)."""
     names = [v for v, _ in (views or VIEWS)]
-    c1, c2 = st.columns([4.2, 1])
+    c1, c2 = st.columns([3.3, 1.5])
     view = c1.segmented_control("Graphs", names, default=default_view if default_view in names else names[0],
                                 key=f"gv_{ckey}", label_visibility="collapsed")
     mode = c2.segmented_control("Show as", MODES, default="Daily", key=f"gm_{ckey}", label_visibility="collapsed")
