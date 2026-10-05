@@ -197,11 +197,11 @@ CHANNEL_TYPES = [
     ("outbound", "Outbound", "Outbound Prospecting",
      "Volume is contacts per day, not people, so one GTM engineer can scale sending. Put the people running this "
      "channel in People Cost here, not in fixed expenses. Mailboxes × sends per mailbox caps the volume (0 = no cap). "
-     "Contacts → replies → interested → meetings held → customers.",
+     "Contacts → leads (replies) → interested → meetings held → customers.",
      [("Contacts Per Day", "contacts_per_day", "num"), ("Cost Per Contact", "cost_per_contact", "money"),
       ("People Cost Per Month", "people_cost_per_month", "money"), ("Tools Cost Per Month", "tools_cost_per_month", "money"),
       ("Mailboxes", "mailboxes", "num"), ("Sends Per Mailbox Per Day", "sends_per_mailbox_per_day", "num"),
-      ("Reply Rate", "reply_rate", "pct"), ("Positive Reply Rate", "positive_reply_rate", "pct"),
+      ("Contact To Lead Rate", "contact_to_lead_rate", "pct"), ("Positive Reply Rate", "positive_reply_rate", "pct"),
       ("Meeting Rate", "meeting_rate", "pct"), ("Close Rate", "close_rate", "pct")]),
     ("volume", "Organic, Content and SEO", "SEO",
      "Visitors per month from search, content, reviews or community. Content cost is what the channel costs to run "

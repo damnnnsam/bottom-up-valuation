@@ -15,7 +15,8 @@ financing events, simulated day by day.
   Marketing events one row per channel and day window. Drivers:
                      spend     spend per day with CPM and CTR, or cost per click
                      outbound  contacts per day, cost per contact, people and
-                               tools, reply / positive / meeting / close rates
+                               tools, contact to lead / positive reply / meeting /
+                               close rates
                      volume    visits per day given directly (SEO, content)
                      viral     active customers x invites x invite conversion
                      team      headcount x contacts per head per month
@@ -101,8 +102,8 @@ class MarketingEvent:
     tools_cost_per_month: float = 0.0
     mailboxes: float = 0.0  # optional sending limit: mailboxes x sends per mailbox per day (0 = no limit)
     sends_per_mailbox_per_day: float = 0.0
-    reply_rate: float = 0.0  # contacts -> replies
-    positive_reply_rate: float = 0.0  # replies -> interested
+    contact_to_lead_rate: float = 0.0  # contacts -> leads (replies)
+    positive_reply_rate: float = 0.0  # leads -> interested
     meeting_rate: float = 0.0  # interested -> meeting held
     close_rate: float = 0.0  # meeting -> customer
     # volume driver
@@ -269,6 +270,8 @@ def state_from_dict(d: dict) -> State:
         offers.append(o)
     events = []
     for ed in d.pop("events", []):
+        if "reply_rate" in ed and "contact_to_lead_rate" not in ed:  # saved before the rename
+            ed = dict(ed, contact_to_lead_rate=ed["reply_rate"])
         e = _pick(MarketingEvent, ed)
         events.append(e)
     expenses = [_pick(FixedExpense, x) for x in d.pop("expenses", [])]
@@ -573,9 +576,9 @@ def _event_rates(ev: MarketingEvent) -> tuple:
         if ev.mailboxes > 0 and ev.sends_per_mailbox_per_day > 0:
             c = min(c, ev.mailboxes * ev.sends_per_mailbox_per_day)
         cost = c * ev.cost_per_contact + (ev.people_cost_per_month + ev.tools_cost_per_month) / 30.0
-        replies = c * ev.reply_rate
-        meetings = replies * ev.positive_reply_rate * ev.meeting_rate
-        return cost, c, replies, meetings, meetings * ev.close_rate
+        leads = c * ev.contact_to_lead_rate
+        meetings = leads * ev.positive_reply_rate * ev.meeting_rate
+        return cost, c, leads, meetings, meetings * ev.close_rate
     if ev.driver == "team":
         cost = ev.headcount * ev.salary_per_month / 30.0
         imp = ev.headcount * ev.contacts_per_head_per_month / 30.0

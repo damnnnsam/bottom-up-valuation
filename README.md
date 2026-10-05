@@ -1,6 +1,6 @@
 # Bottom-up valuation
 
-Value a business from the metrics its marketing produces every day: CPM, click-through rate, reply rate, meeting rate, close rate, price, churn, time to collect. The model simulates the business day by day from those inputs, discounts the cash flows, and puts a number on the whole thing. Change one input, and you see what it is worth.
+Value a business from the metrics its marketing produces every day: CPM, click-through rate, contact to lead rate, meeting rate, close rate, price, churn, time to collect. The model simulates the business day by day from those inputs, discounts the cash flows, and puts a number on the whole thing. Change one input, and you see what it is worth.
 
 It runs as a small Streamlit app.
 
@@ -13,11 +13,11 @@ Two example clients are included. Pick one in the sidebar.
 
 ## Why bottom-up
 
-A business is a set of offers, and a set of channels that bring customers to those offers, and a set of costs for running it. Everything else follows. A top-down model starts from revenue and a growth rate and works down to a margin. This model starts from a channel row that says "300 contacts per day at $0.35 each, 4% reply, 30% of replies interested, 60% of those take a meeting, 22% close, 30-day sales cycle" and works up to cash, profit and value.
+A business is a set of offers, and a set of channels that bring customers to those offers, and a set of costs for running it. Everything else follows. A top-down model starts from revenue and a growth rate and works down to a margin. This model starts from a channel row that says "300 contacts per day at $0.35 each, 4% contact to lead, 30% of leads interested, 60% of those take a meeting, 22% close, 30-day sales cycle" and works up to cash, profit and value.
 
 Two reasons to do it this way:
 
-1. The inputs are the numbers you can actually measure and change. An ad platform tells you CPM and CTR today. Your sending tool tells you the reply rate today. A growth rate is a result, not a lever.
+1. The inputs are the numbers you can actually measure and change. An ad platform tells you CPM and CTR today. Your sending tool tells you the contact to lead rate today. A growth rate is a result, not a lever.
 2. Timing is money. Spend goes out on day 1, the lead arrives after the time to market, the sale closes after the sales cycle, the cash arrives after the time to collect, the refund window closes later still. Two businesses with the same unit economics and different timing need different amounts of cash. A monthly or quarterly model cannot see that; a daily one can.
 
 Every marketing row is marked **validated** (the rates come from measured data) or **hypothesis**. A state that is 0 of 7 validated is a plan. A state that is 7 of 7 is a business.
@@ -29,7 +29,7 @@ A **state** is one version of the business. You compare states: current vs plan,
 | Primitive | What it holds |
 |---|---|
 | **Offer** | Price, realization rate, cost to sell, cost to fulfil, time to collect, refund period and rate, contract length, churn, renewal price and costs, renewal rate of renewals. Or a payment schedule (day, amount) for anything that doesn't fit a contract. |
-| **Marketing event** | One channel for one day window. Paid: spend per day with CPM and CTR, or cost per click. Outbound: contacts per day, cost per contact, people and tools, reply, positive reply, meeting and close rates. Organic: visits per day. Viral: invites per customer and invite conversion. Each row has time to market, sales cycle, an optional offer mix across tiers, and the validated flag. |
+| **Marketing event** | One channel for one day window. Paid: spend per day with CPM and CTR, or cost per click. Outbound: contacts per day, cost per contact, people and tools, contact to lead, positive reply, meeting and close rates. Organic: visits per day. Viral: invites per customer and invite conversion. Each row has time to market, sales cycle, an optional offer mix across tiers, and the validated flag. |
 | **Fixed expense** | Amount per day for a day window, plus an amount per 100 active customers. Flags for employee and for sales & marketing (counts toward fully loaded CAC). |
 | **Financing event** | Equity (amount, pre-money valuation or shares issued; dilutes), grant, or loan (interest, grace, maturity, compounding). Changes cash, debt and share count. Does not change the discounted cash flow, except through loan interest. |
 | **Upgrade** | A monthly share of active customers on one offer moves to another. Expansion revenue between tiers. |

@@ -23,7 +23,7 @@ SERIES = {
     "new_customers_viral": ("New customers: viral", "new_customers_viral", "flow", False),
     # funnel
     "impressions": ("Reached (impressions, contacts, visits)", "impressions", "flow", False),
-    "views": ("Engaged (clicks, replies)", "views", "flow", False),
+    "views": ("Engaged (clicks, leads)", "views", "flow", False),
     "leads": ("Leads and meetings", "leads", "flow", False),
     "leads_inbound": ("Leads: inbound", "leads_inbound", "flow", False),
     "leads_outbound": ("Leads: outbound", "leads_outbound", "flow", False),
