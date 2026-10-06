@@ -83,6 +83,7 @@ def inject_css() -> None:
 .stApp [data-testid="stBaseButton-primary"] {{ background: {NAVY}; border: 1px solid {NAVY}; border-radius: 8px; }}
 .stApp [data-testid="stBaseButton-primary"]:hover {{ background: #13315c; border-color: #13315c; }}
 .stApp [data-testid="stBaseButton-primary"] p {{ color: #ffffff !important; font-weight: 500; }}
+.stApp [data-testid="stBaseButton-primary"]:disabled {{ opacity: 0.35; }}
 .stApp [data-testid="stBaseButton-secondary"] {{ border-radius: 8px; border-color: {RULE}; }}
 .stApp [data-baseweb="input"], .stApp [data-baseweb="select"] > div, .stApp textarea {{ border-radius: 8px !important; }}
 [data-testid="stExpander"] details {{ background: #fff; border: 1px solid {RULE}; border-radius: 10px; }}
