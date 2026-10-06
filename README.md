@@ -70,8 +70,6 @@ data/clients/example-*   the two example clients
 
 Your own clients under `data/clients/` are git-ignored; only `example-*` folders are tracked.
 
-## Credits
+## License
 
-The row-and-day-window structure (offers, marketing events with start and end days, fixed expenses, financing events, state comparisons with difference charts) follows the comparison tool Nick Kozmin of Salesprocess.io shows in his videos. The engine, the metrics and the app are an independent implementation. The Higher EdTech example reproduces the numbers from one of those videos.
-
-MIT license.
+MIT.
