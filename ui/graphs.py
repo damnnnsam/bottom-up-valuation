@@ -242,3 +242,89 @@ def render_view(named: list, view: str, mode: str, ckey: str, compare_day=None, 
         with cols[i % 2]:
             values_chart(named, key, mode, f"{ckey}_{key}", compare_day)
         i += 1
+
+
+def _slug(key: str) -> str:
+    return "g-" + key.replace("_", "-")
+
+
+def shortcuts_html(named: list) -> str:
+    """Anchor links to every graph on the page, grouped like the views."""
+    parts = []
+    seen = set()
+    for view, keys in VIEWS:
+        if view == "Overview":
+            continue
+        items = []
+        for k in keys:
+            if k in seen or k not in SERIES or not _has_data(named, k):
+                continue
+            seen.add(k)
+            items.append(f'<a href="#{_slug(k)}">{SERIES[k][0]}</a>')
+        if items:
+            parts.append(f'<div class="c-sc-group"><div class="c-sc-title">{view}</div>' + "".join(items) + "</div>")
+    rest = [k for k in SERIES if k not in seen and _has_data(named, k)]
+    if rest:
+        parts.append('<div class="c-sc-group"><div class="c-sc-title">Other</div>'
+                     + "".join(f'<a href="#{_slug(k)}">{SERIES[k][0]}</a>' for k in rest) + "</div>")
+    return '<div class="c-shortcuts">' + "".join(parts) + "</div>"
+
+
+def _has_data(named: list, key: str) -> bool:
+    return any(np.any(series(r, key)) for _, r in named)
+
+
+def render_all(named: list, mode: str, ckey: str, compare_day=None) -> None:
+    """Every series on one page: values, then absolute and percent difference against the first state."""
+    import streamlit as st
+    multi = len(named) > 1
+    seen = set()
+    order = [k for _, keys in VIEWS for k in keys if k in SERIES] + list(SERIES)
+    for key in order:
+        if key in seen or not _has_data(named, key):
+            continue
+        seen.add(key)
+        st.markdown(f'<div class="c-anchor" id="{_slug(key)}"></div>', unsafe_allow_html=True)
+        values_chart(named, key, mode, f"{ckey}_{key}_v", compare_day, height=360)
+        if multi:
+            a, b = st.columns(2, gap="medium")
+            with a:
+                _difference_chart(named, key, mode, f"{ckey}_{key}", compare_day, "abs")
+            with b:
+                _difference_chart(named, key, mode, f"{ckey}_{key}", compare_day, "pct")
+
+
+def _difference_chart(named, key, mode, ckey, compare_day, which) -> None:
+    label, _, kind, is_money = SERIES[key]
+    base_name, base = named[0]
+    bx, by = shaped(series(base, key), kind, mode)
+    fig = go.Figure()
+    for i, (name, r) in enumerate(named[1:], start=1):
+        x, y = shaped(series(r, key), kind, mode)
+        n = min(len(y), len(by))
+        dd = y[:n] - by[:n]
+        colr = PALETTE[i % len(PALETTE)]
+        if which == "abs":
+            fig.add_trace(go.Scatter(x=x[:n], y=dd, mode="lines", name=f"{name} minus {base_name}",
+                                     line=dict(color=colr, width=2), fill="tozeroy", fillcolor="rgba(37,99,235,0.08)"))
+            if compare_day is not None:
+                d = (compare_day // 30) - 1 if mode == "Monthly" else compare_day
+                if 0 <= d < n:
+                    txt = money(dd[d]) if is_money else f"{dd[d]:,.1f}"
+                    fig.add_annotation(x=x[d], y=dd[d], text=f"{'Month' if mode == 'Monthly' else 'Day'} {x[d]:,}: {txt}",
+                                       showarrow=True, arrowcolor="#adb5bd", ax=80, ay=50, bgcolor="#fff",
+                                       bordercolor=RULE, borderpad=6)
+        else:
+            floor = max(0.02 * float(np.max(np.abs(by[:n]))) if n else 0.0, 1e-9)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                pc = np.where(np.abs(by[:n]) > floor, dd / np.abs(by[:n]) * 100.0, np.nan)
+            fig.add_trace(go.Scatter(x=x[:n], y=pc, mode="lines", name=f"{name} vs {base_name}",
+                                     line=dict(color=colr, width=2)))
+    if compare_day is not None:
+        fig.add_vline(x=(compare_day // 30) if mode == "Monthly" else compare_day, line=dict(color="#adb5bd", dash="dash"))
+    xt = "Month" if mode == "Monthly" else "Days"
+    if which == "abs":
+        chart(fig, "Absolute difference", 300, money_axis=is_money, key=ckey + "_a", xtitle=xt)
+    else:
+        fig.update_yaxes(ticksuffix="%")
+        chart(fig, "Percent difference", 300, key=ckey + "_p", xtitle=xt)

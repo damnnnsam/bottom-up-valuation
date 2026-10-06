@@ -1153,47 +1153,30 @@ def render_comparison(client: str, comp: Comparison, share: bool) -> None:
                    f"{money_short(diff)} discounted future cash flow benefit after {d:,} days{using}. "
                    f"Here's a link to the model: {share_url(client, comparison=comp.id)}")
 
-    sec = st.segmented_control("Section", ["Comparison", "Graphs", "States"], default="Comparison",
-                               key=f"csec_{comp.id}", label_visibility="collapsed") or "Comparison"
+    # One page, in this order: the states side by side, key metrics, then every graph.
+    subtitle("States")
+    cols = st.columns(len(states), gap="medium")
+    for col, s, nm, (r, k, v) in zip(cols, states, short, outs):
+        with col:
+            st.markdown(f'<div class="c-statetitle">{esc(s.title) if share else link(s.title, client=client, state=s.id)}</div>',
+                        unsafe_allow_html=True)
+            vs = validation_summary(s)
+            if vs:
+                st.markdown(f'<div class="c-muted" style="margin:-8px 0 10px">{esc(vs)}</div>', unsafe_allow_html=True)
+            card("Sim Parameters", sim_parameters_html(s, client, share))
+            card("Starting State", starting_state_html(s))
+            card("Offer Segments", offers_html(s, compact=True))
+            payment_chart(s, key=f"cpc_{comp.id}_{s.id}", height=280)
+            card("Marketing Events", events_html(s))
+            card("Fixed Expenses", expenses_html(s))
+            if s.upgrades:
+                card("Upgrades", upgrades_html(s))
+            if s.financing:
+                card("Financing Events", financing_html(s))
 
-    if sec == "States":
-        cols = st.columns(len(states), gap="medium")
-        for col, s, (r, k, v) in zip(cols, states, outs):
-            with col:
-                st.markdown(f'<div class="c-statetitle">{esc(s.title) if share else link(s.title, client=client, state=s.id)}</div>',
-                            unsafe_allow_html=True)
-                vs = validation_summary(s)
-                if vs:
-                    st.markdown(f'<div class="c-muted" style="margin:-8px 0 10px">{esc(vs)}</div>', unsafe_allow_html=True)
-                card("Sim Parameters", sim_parameters_html(s, client, share))
-                card("Offer Segments", offers_html(s, compact=True))
-                payment_chart(s, key=f"cpc_{comp.id}_{s.id}", height=280)
-                card("Marketing Events", events_html(s))
-                card("Fixed Expenses", expenses_html(s))
-                if s.upgrades:
-                    card("Upgrades", upgrades_html(s))
-                if s.financing:
-                    card("Financing Events", financing_html(s))
-        return
-
-    if sec == "Graphs":
-        view, mode = G.picker(f"c{comp.id}")
-        G.render_view(named, view, mode, f"cg_{comp.id}", compare_day=day)
-        if len(named) >= 2:
-            subtitle("Difference against the baseline")
-            keys = [k_ for k_ in dict(G.VIEWS)[view] if k_ in G.SERIES]
-            all_keys = list(G.SERIES)
-            pick = st.selectbox("Series", all_keys, index=all_keys.index(keys[0]) if keys else 0,
-                                format_func=lambda k_: G.SERIES[k_][0], key=f"cdiff_{comp.id}")
-            a, b = st.columns(2, gap="medium")
-            with a:
-                G.values_chart(named, pick, mode, f"cdv_{comp.id}", compare_day=day)
-            with b:
-                G.difference_charts(named, pick, mode, f"cdd_{comp.id}", compare_day=day)
-        return
-
+    subtitle("Key Metrics")
     heads = ["Metric"] + short + (
-        ["Change"] if len(states) == 2 else [f"Δ {nm}" for nm in short[1:]])
+        ["Change"] if len(states) == 2 else [f"\u0394 {nm}" for nm in short[1:]])
     rows = []
     for label, fn, fmt in METRIC_ROWS:
         vals = [fn(s, r, k, v) for s, (r, k, v) in zip(states, outs)]
@@ -1201,22 +1184,27 @@ def render_comparison(client: str, comp: Comparison, share: bool) -> None:
         for x in vals[1:]:
             ok = np.isfinite(x) and np.isfinite(vals[0]) and "days" not in label
             deltas.append(signed(x - vals[0], fmt if fmt in (money,) else (lambda z: num(round(z, 2 if abs(z) < 100 else 0))),
-                                 lower_is_better=None if label in NEUTRAL else label in LOWER_IS_BETTER) if ok else "–")
+                                 lower_is_better=None if label in NEUTRAL else label in LOWER_IS_BETTER) if ok else "\u2013")
         rows.append([esc(label)] + [fmt(x) for x in vals] + deltas)
     card("Key Metrics", table(heads, rows, num_cols=set(range(1, len(heads)))))
-    vs = [validation_summary(s) for s in states]
-    if any(vs):
-        card("Validation", table(["State", "Marketing rows"], [[esc(nm), esc(x or "–")] for nm, x in zip(short, vs)]))
-
     a, b = st.columns(2, gap="medium")
     with a:
-        dcf_chart(named, day, key=f"cdcf_{comp.id}")
-        cash_chart(named, key=f"ccash_{comp.id}")
-        G.values_chart(named, "active_customers", "Daily", f"cact_{comp.id}", compare_day=day)
+        card(f"Targets: {short[0]} (payback in {num(states[0].target_payback_months)} months, "
+             f"LTV : CAC {num(states[0].target_ltv_cac)})", targets_html(states[0]))
     with b:
-        if len(named) >= 2:
-            G.difference_charts(named, "cum_dcf", "Daily", f"cdcfd_{comp.id}", compare_day=day)
-        G.values_chart(named, "cash_collected_total", "Monthly", f"ccc_{comp.id}", compare_day=day)
+        if len(states) > 1:
+            card(f"Targets: {short[1]} (payback in {num(states[1].target_payback_months)} months, "
+                 f"LTV : CAC {num(states[1].target_ltv_cac)})", targets_html(states[1]))
+
+    subtitle("Graphs")
+    c1, c2 = st.columns([3, 1.2])
+    c1.markdown('<div class="c-muted" style="margin-top:6px">Every series, each as values for all states, then the '
+                'absolute and percent difference against the first state. Click a name to jump to it.</div>',
+                unsafe_allow_html=True)
+    mode = c2.segmented_control("Show as", G.MODES, default="Daily", key=f"cgm_{comp.id}",
+                                label_visibility="collapsed") or "Daily"
+    st.markdown(G.shortcuts_html(named), unsafe_allow_html=True)
+    G.render_all(named, mode, f"cg_{comp.id}", compare_day=day)
     if msg:
         with st.expander("Message template"):
             st.text_area("Message", msg, height=100, key=f"msg_{comp.id}", label_visibility="collapsed")

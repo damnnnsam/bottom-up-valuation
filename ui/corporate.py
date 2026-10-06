@@ -167,6 +167,15 @@ a.c-red:hover {{ text-decoration: underline !important; }}
           vertical-align: middle; }}
 .c-pill.pos {{ background: #ecfdf5; color: {POS}; }}
 .c-pill.neg {{ background: #fef2f2; color: {RED}; }}
+/* graph shortcuts (one-page comparison) */
+.c-shortcuts {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px 24px;
+               background: #fff; border: 1px solid {RULE}; border-radius: 12px; padding: 14px 18px 16px; margin: 6px 0 18px; }}
+.c-sc-group {{ break-inside: avoid; }}
+.c-sc-title {{ font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: {FAINT}; font-weight: 600;
+              margin: 6px 0 4px; }}
+.c-shortcuts a {{ display: block; font-size: 13px; color: {ACCENT}; text-decoration: none; line-height: 1.6; }}
+.c-shortcuts a:hover {{ text-decoration: underline; }}
+.c-anchor {{ position: relative; top: -70px; height: 0; }}
 /* legacy summary box */
 .c-summary {{ font-family: {FONT}; background: #fff; border: 1px solid {RULE}; border-radius: 12px;
              padding: 16px 20px; margin-bottom: 18px; font-size: 13px; color: {MUTED}; }}
