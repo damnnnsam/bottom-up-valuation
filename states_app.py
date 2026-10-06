@@ -540,7 +540,9 @@ def render_state(client: str, s: State, share: bool) -> None:
     at = c1.number_input("Metrics at day", 0, T - 1, T - 1, step=30, key=f"at_{s.id}")
     r, k, v = run(s, int(at))
     if not share:
-        if c2.button("Edit", key=f"e_{s.id}", type="primary"):
+        if c2.button("Live", key=f"lv_{s.id}", type="primary", help="All inputs on the left, results update as you type"):
+            go_to(client=client, state=s.id, live=1)
+        if c4.button("Tables", key=f"e_{s.id}"):
             go_to(client=client, state=s.id, edit=1)
         if c3.button("Share link", key=f"sh_{s.id}"):
             st.session_state[f"show_share_{s.id}"] = True
@@ -1040,6 +1042,8 @@ def render_editor(client: str, sid: str) -> None:
             st.rerun()
         if st.button("View report", key=f"view_{k}"):
             go_to(client=client, state=sid)
+        if st.button("Live view", key=f"live_{k}"):
+            go_to(client=client, state=sid, live=1)
 
         st.markdown("#### Clone as Intervention State")
         nt = st.text_input("New state title", cur.title.replace("Before", "After"), key=f"cl_t_{k}")
@@ -1234,7 +1238,7 @@ def render_home(client: str) -> None:
         rows.append([link(s.title, client=client, state=s.id), len(s.offers), len(s.events), len(s.expenses),
                      money(v.dcf_cumulative), money(k.cac_blended),
                      f"{k.ltv_cac_ratio:,.2f}" if np.isfinite(k.ltv_cac_ratio) else "–", money(k.cash_needed),
-                     days(k.time_to_profitability_days), link("Edit", client=client, state=s.id, edit=1)])
+                     days(k.time_to_profitability_days), link("Live", client=client, state=s.id, live=1)])
     card("States", table(["Title", "Offers", "Events", "Expenses", "Total DCF After Tax", "CAC", "LTV : CAC",
                           "Cash Needed", "Time To Profitability", ""], rows, num_cols={1, 2, 3, 4, 5, 6, 7})
          if rows else '<div class="c-muted">No states yet.</div>')
@@ -1292,7 +1296,7 @@ def sidebar(client: str | None) -> str | None:
             else:
                 s = clone_state(next(x for x in states if x.id == src), t)
             save_state(pick, s)
-            go_to(client=pick, state=s.id, edit=1)
+            go_to(client=pick, state=s.id, live=1)
     with st.sidebar.expander("New comparison"):
         t = st.text_input("Title", "New Comparison", key="new_c_t")
         opts = {s.id: s.title for s in states}
@@ -1312,6 +1316,318 @@ def sidebar(client: str | None) -> str | None:
     return pick
 
 
+# ── Live mode: every input in the sidebar, results update as you type ──
+
+LIVE_NEW_ROWS = {
+    "spend": ("Paid ads", dict(channel="Paid Advertising", spend_per_day=100.0, cpm=25.0, ctr=0.01, lead_to_view=0.03,
+                               sale_to_lead=0.10, sales_cycle_days=14)),
+    "outbound": ("Outbound", dict(channel="Multichannel Outbound", contacts_per_day=200.0, cost_per_contact=0.30,
+                                  tools_cost_per_month=500.0, contact_to_lead_rate=0.02, positive_reply_rate=0.30,
+                                  meeting_rate=0.60, close_rate=0.20, sales_cycle_days=30)),
+    "volume": ("Organic / SEO", dict(channel="SEO", views_per_day=100.0, lead_to_view=0.01, sale_to_lead=0.10,
+                                     sales_cycle_days=14)),
+    "viral": ("Viral / referral", dict(channel="Viral", invites_per_customer=0.5, invite_conversion=0.10,
+                                       sales_cycle_days=14)),
+}
+
+
+def _lv(box, label, value, kind, key, help=None):
+    """Number input in natural units. Returns the value in model units."""
+    value = 0.0 if value is None else value
+    if kind == "pct":
+        return box.number_input(f"{label} (%)", value=float(value) * 100.0, step=0.1, format="%.2f", key=key,
+                                help=help) / 100.0
+    if kind in ("money_m", "num_m"):
+        v = float(value) * 30.0
+        lab = f"{label} ($)" if kind == "money_m" else label
+        return box.number_input(lab, value=v, step=100.0 if v >= 100 else 10.0, format="%.0f", key=key,
+                                help=help) / 30.0
+    if kind == "int":
+        return int(box.number_input(label, value=int(value), step=1, key=key, help=help))
+    if kind == "money":
+        v = float(value)
+        return box.number_input(f"{label} ($)", value=v, step=100.0 if v >= 1000 else (1.0 if v >= 10 else 0.05),
+                                format="%.0f" if v >= 1000 else "%.2f", key=key, help=help)
+    v = float(value)
+    return box.number_input(label, value=v, step=1.0 if v >= 10 else 0.1,
+                            format="%.0f" if v >= 100 and v == round(v) else "%.2f", key=key, help=help)
+
+
+def _canon(x):
+    """State dict with floats rounded, so unit conversions in the inputs don't count as edits."""
+    if isinstance(x, dict):
+        return {k_: _canon(v_) for k_, v_ in x.items() if k_ not in ("created",)}
+    if isinstance(x, list):
+        return [_canon(v_) for v_ in x]
+    if isinstance(x, float):
+        return float(f"{x:.9g}")
+    return x
+
+
+def _pairs(box, items):
+    """Lay inputs out two per row. items: list of (label, value, kind, key, setter)."""
+    for j in range(0, len(items), 2):
+        cols = box.columns(2)
+        for c, (lab, val, kind, key, setter) in zip(cols, items[j:j + 2]):
+            setter(_lv(c, lab, val, kind, key))
+
+
+def render_live(client: str, sid: str) -> None:
+    saved = load_state(client, sid)
+    if saved is None:
+        st.error("State not found.")
+        return
+    draft = st.session_state.get(f"draft_{sid}")
+    cur = state_from_dict(draft) if draft else state_from_dict(state_to_dict(saved))
+    k = f"lv_{sid}_{_ver(sid)}"
+    sb = st.sidebar
+    st.markdown('<style>section[data-testid="stSidebar"]{width:440px !important;min-width:440px !important}'
+                '[data-testid="stSidebar"] [data-testid="stNumberInput"] label p{font-size:12px !important}'
+                '[data-testid="stSidebar"] .stNumberInput{margin-bottom:-6px}</style>', unsafe_allow_html=True)
+
+    sb.markdown(f'<div class="c-statetitle" style="margin-top:-8px">{esc(cur.title)}</div>', unsafe_allow_html=True)
+    nav = sb.columns(3)
+    if nav[0].button("Report", key=f"{k}_rep"):
+        go_to(client=client, state=sid)
+    if nav[1].button("Tables", key=f"{k}_tab", help="The full editor with every field as a table"):
+        go_to(client=client, state=sid, edit=1)
+    if nav[2].button("Client", key=f"{k}_home"):
+        go_to(client=client)
+
+    # Starting state
+    with sb.expander("Starting state", expanded=False):
+        book = existing_book(cur)
+        def _set(attr):
+            return lambda v: setattr(cur, attr, v)
+        _pairs(st, [("Starting cash", cur.starting_cash, "money", f"{k}_cash", _set("starting_cash")),
+                    ("Debt", cur.debt, "money", f"{k}_debt", _set("debt")),
+                    ("Interest rate", cur.interest_rate, "pct", f"{k}_ir", _set("interest_rate")),
+                    ("Payment fee", cur.transaction_fee, "pct", f"{k}_fee", _set("transaction_fee")),
+                    ("Upfront investment", cur.upfront_investment, "money", f"{k}_up", _set("upfront_investment")),
+                    ("Market size (0 = no cap)", cur.total_addressable_market, "num", f"{k}_tam",
+                     _set("total_addressable_market"))])
+        st.caption("Customers on day 0")
+        newbook = {}
+        items = []
+        for o in cur.offers:
+            items.append((o.name, book.get(o.name, 0.0), "num", f"{k}_ex_{o.name}",
+                          (lambda name: (lambda v: newbook.__setitem__(name, v)))(o.name)))
+        _pairs(st, items)
+        cur.existing_by_offer = {n_: v_ for n_, v_ in newbook.items() if v_ > 0}
+        cur.existing_customers = float(sum(cur.existing_by_offer.values()))
+        cur.existing_customers_offer = max(cur.existing_by_offer, key=cur.existing_by_offer.get) if cur.existing_by_offer else ""
+
+    # Offers
+    with sb.expander("Offers", expanded=False):
+        for j, o in enumerate(cur.offers):
+            st.markdown(f"**{esc(o.name)}**")
+            if o.billing == "schedule":
+                st.caption(f"Payment schedule with {len(o.payments)} payments: edit it in Tables.")
+                continue
+            def _so(attr, o=o):
+                return lambda v: setattr(o, attr, v)
+            old_ful, old_sell_ren = o.cost_to_fulfill, o.renewal_cost_to_fulfill
+            _pairs(st, [("Price", o.price, "money", f"{k}_op_{j}", _so("price")),
+                        ("Contract length (days)", o.contract_length, "int", f"{k}_ol_{j}", _so("contract_length")),
+                        ("Churn at first renewal", o.churn_rate, "pct", f"{k}_oc_{j}", _so("churn_rate")),
+                        ("Renewal rate after that", o.renewal_rate_of_renewals, "pct", f"{k}_orr_{j}",
+                         _so("renewal_rate_of_renewals")),
+                        ("Renewal price", o.renewal_price, "money", f"{k}_orp_{j}", _so("renewal_price")),
+                        ("Cost to fulfil", o.cost_to_fulfill, "pct", f"{k}_of_{j}", _so("cost_to_fulfill")),
+                        ("Cost to sell", o.cost_to_sell, "pct", f"{k}_os_{j}", _so("cost_to_sell")),
+                        ("Time to collect (days)", o.time_to_collect, "int", f"{k}_ot_{j}", _so("time_to_collect"))])
+            if abs(old_sell_ren - old_ful) < 1e-12:  # same delivery cost on renewals: keep them together
+                o.renewal_cost_to_fulfill = o.cost_to_fulfill
+
+    # Marketing channels
+    offer_names = [o.name for o in cur.offers]
+    with sb.expander("Marketing channels", expanded=True):
+        remove = None
+        for i, e in enumerate(cur.events):
+            spec = next((t for t in CHANNEL_TYPES if t[0] == e.driver), None)
+            box = st.container(border=True)
+            h = box.columns([5, 1])
+            h[0].markdown(f"**{esc(e.title)}**  \n<span class='c-muted' style='font-size:12px'>{esc(e.channel)}"
+                          f"{'' if e.validated else ' · hypothesis'}</span>", unsafe_allow_html=True)
+            if h[1].button("✕", key=f"{k}_rm_{i}", help="Remove this channel"):
+                remove = i
+            def _se(attr, e=e):
+                return lambda v: setattr(e, attr, v)
+            items = [("Start day", e.start_day, "int", f"{k}_es_{i}", _se("start_day")),
+                     ("End day", e.end_day, "int", f"{k}_ee_{i}", _se("end_day"))]
+            for lab, attr, kind in (spec[4] if spec else []):
+                items.append((lab, getattr(e, attr), kind, f"{k}_e_{attr}_{i}", _se(attr)))
+            items += [("Time to market (days)", e.time_to_market, "int", f"{k}_ettm_{i}", _se("time_to_market")),
+                      ("Sales cycle (days)", e.sales_cycle_days, "int", f"{k}_esc_{i}", _se("sales_cycle_days"))]
+            _pairs(box, items)
+            e.validated = box.checkbox("Validated (measured, not assumed)", e.validated, key=f"{k}_ev_{i}")
+        if remove is not None:
+            cur.events.pop(remove)
+            _set_draft(sid, cur)
+        st.caption("Add a channel")
+        a = st.columns([3, 3, 2])
+        kind = a[0].selectbox("Type", list(LIVE_NEW_ROWS), format_func=lambda x: LIVE_NEW_ROWS[x][0],
+                              key=f"{k}_addk", label_visibility="collapsed")
+        off = a[1].selectbox("Offer", offer_names or [""], key=f"{k}_addo", label_visibility="collapsed")
+        if a[2].button("Add", key=f"{k}_add"):
+            lab, defaults = LIVE_NEW_ROWS[kind]
+            e = MarketingEvent(title=f"{lab} {sum(1 for x in cur.events if x.driver == kind) + 1}", offer=off,
+                               driver=kind, start_day=0, end_day=int(cur.time_span) - 1, ctr=1.0)
+            for a_, v_ in defaults.items():
+                setattr(e, a_, v_)
+            if kind == "spend":
+                e.ctr = defaults["ctr"]
+            cur.events.append(e)
+            _set_draft(sid, cur)
+
+    # Fixed costs
+    with sb.expander("Fixed costs", expanded=False):
+        remove = None
+        for i, x in enumerate(cur.expenses):
+            box = st.container(border=True)
+            h = box.columns([5, 1])
+            h[0].markdown(f"**{esc(x.title)}**", unsafe_allow_html=True)
+            if h[1].button("✕", key=f"{k}_xrm_{i}"):
+                remove = i
+            def _sx(attr, x=x):
+                return lambda v: setattr(x, attr, v)
+            items = [("Per month", x.amount_per_day, "money_m", f"{k}_xa_{i}", _sx("amount_per_day")),
+                     ("Per 100 customers per month", x.per_100_customers_per_day, "money_m", f"{k}_xp_{i}",
+                      _sx("per_100_customers_per_day")),
+                     ("Start day", x.start_day, "int", f"{k}_xs_{i}", _sx("start_day")),
+                     ("End day", x.end_day, "int", f"{k}_xe_{i}", _sx("end_day"))]
+            _pairs(box, items)
+            x.sales_marketing = box.checkbox("Sales & marketing (counts toward CAC)", x.sales_marketing, key=f"{k}_xsm_{i}")
+        if remove is not None:
+            cur.expenses.pop(remove)
+            _set_draft(sid, cur)
+        a = st.columns([4, 2])
+        nt = a[0].text_input("New cost", "", key=f"{k}_xnew", placeholder="e.g. Head of Sales",
+                             label_visibility="collapsed")
+        if a[1].button("Add", key=f"{k}_xadd") and nt.strip():
+            cur.expenses.append(FixedExpense(nt.strip(), "", 0, int(cur.time_span) - 1, 5000 / 30, employee=True))
+            _set_draft(sid, cur)
+
+    # Upgrades
+    if cur.upgrades:
+        with sb.expander("Upgrades between offers", expanded=False):
+            items = []
+            for i, u in enumerate(cur.upgrades):
+                items.append((f"{u.from_offer} → {u.to_offer} per month", u.monthly_rate, "pct", f"{k}_u_{i}",
+                              (lambda u: (lambda v: setattr(u, "monthly_rate", v)))(u)))
+            _pairs(st, items)
+
+    # Financing
+    with sb.expander("Financing", expanded=False):
+        remove = None
+        for i, f in enumerate(cur.financing):
+            box = st.container(border=True)
+            h = box.columns([5, 1])
+            h[0].markdown(f"**{esc(f.title)}** <span class='c-muted' style='font-size:12px'>{f.kind}</span>",
+                          unsafe_allow_html=True)
+            if h[1].button("✕", key=f"{k}_frm_{i}"):
+                remove = i
+            def _sf(attr, f=f):
+                return lambda v: setattr(f, attr, v)
+            items = [("Amount", f.amount, "money", f"{k}_fa_{i}", _sf("amount")),
+                     ("Day", f.day, "int", f"{k}_fd_{i}", _sf("day"))]
+            if f.kind == "loan":
+                items += [("Interest rate", f.interest_rate, "pct", f"{k}_fi_{i}", _sf("interest_rate")),
+                          ("Repaid by day (after loan)", f.maturity_days, "int", f"{k}_fm_{i}", _sf("maturity_days")),
+                          ("Grace (days)", f.grace_days, "int", f"{k}_fg_{i}", _sf("grace_days"))]
+            elif f.kind == "equity":
+                items += [("Pre-money valuation", f.valuation, "money", f"{k}_fv_{i}", _sf("valuation"))]
+            _pairs(box, items)
+        if remove is not None:
+            cur.financing.pop(remove)
+            _set_draft(sid, cur)
+        a = st.columns([3, 2])
+        fk = a[0].selectbox("Type", FIN_KINDS, key=f"{k}_fnew", label_visibility="collapsed")
+        if a[1].button("Add", key=f"{k}_fadd"):
+            cur.financing.append(FinancingEvent(f"{fk.title()} {len(cur.financing) + 1}", fk, 30, 250_000.0,
+                                                interest_rate=0.07 if fk == "loan" else 0.0,
+                                                valuation=5_000_000.0 if fk == "equity" else 0.0))
+            _set_draft(sid, cur)
+
+    # Valuation
+    with sb.expander("Valuation", expanded=False):
+        def _set(attr):
+            return lambda v: setattr(cur, attr, v)
+        _pairs(st, [("Days simulated", cur.time_span, "int", f"{k}_ts", _set("time_span")),
+                    ("Valued up to day", cur.projection_period, "int", f"{k}_pp", _set("projection_period")),
+                    ("Discount rate", cur.discount_rate, "pct", f"{k}_dr", _set("discount_rate")),
+                    ("Tax rate", cur.tax_rate, "pct", f"{k}_tr", _set("tax_rate")),
+                    ("Perpetual growth", cur.perpetual_growth_rate, "pct", f"{k}_g", _set("perpetual_growth_rate")),
+                    ("EBITDA multiple", cur.ebitda_multiple, "num", f"{k}_m", _set("ebitda_multiple")),
+                    ("Shares", cur.shares, "int", f"{k}_sh", _set("shares")),
+                    ("LTV horizon (years)", cur.ltv_years, "num", f"{k}_ly", _set("ltv_years"))])
+        cur.time_span = max(int(cur.time_span), 30)
+        cur.projection_period = min(max(int(cur.projection_period), 1), cur.time_span)
+
+    st.session_state[f"draft_{sid}"] = state_to_dict(cur)
+
+    # ── Results ──
+    page_title(cur.title, cur.description)
+    r, kp, v = run(cur)
+    r0, k0, v0 = run(saved)
+    changed = _canon(state_to_dict(cur)) != _canon(state_to_dict(saved))
+
+    b = st.columns([1, 1.3, 1, 4])
+    if b[0].button("Save", type="primary", key=f"{k}_save", disabled=not changed):
+        save_state(client, cur)
+        st.toast("Saved")
+        st.rerun()
+    with b[1].popover("Save as new state"):
+        nt = st.text_input("Title", cur.title + " (variant)", key=f"{k}_nt")
+        mk = st.checkbox("Compare it with the saved state", True, key=f"{k}_mk")
+        if st.button("Create", key=f"{k}_create", type="primary"):
+            c_ = clone_state(cur, nt)
+            c_.source = ""
+            save_state(client, c_)
+            if mk:
+                save_comparison(client, Comparison(title=f"{saved.title} vs {nt}", state_ids=[saved.id, c_.id]))
+            st.session_state.pop(f"draft_{sid}", None)
+            go_to(client=client, state=c_.id, live=1)
+    if b[2].button("Reset", key=f"{k}_reset", disabled=not changed, help="Back to the saved numbers"):
+        st.session_state.pop(f"draft_{sid}", None)
+        st.session_state[f"ver_{sid}"] = _ver(sid) + 1
+        st.rerun()
+
+    def head(label, now, before, fmt=money_short, lower_is_better=False):
+        d = now - before if (np.isfinite(now) and np.isfinite(before)) else 0.0
+        cls = "" if (not changed or abs(d) < 1e-9) else ("pos" if (d < 0 if lower_is_better else d > 0) else "neg")
+        sub = (f'{"+" if d > 0 else ""}{fmt(d)} vs saved' if changed and abs(d) >= 1e-9 else "Same as saved")
+        return (f'<div class="c-head"><div class="lbl">{esc(label)}</div><div class="val">{fmt(now)}</div>'
+                f'<div class="sub"><span class="c-{"pos" if cls == "pos" else "neg" if cls == "neg" else "muted"}">'
+                f'{esc(sub)}</span></div></div>')
+    ratio = lambda x: f"{x:,.1f}" if np.isfinite(x) else "–"
+    st.markdown('<div class="c-heads">'
+                + head("Total discounted cash flow after tax", v.dcf_cumulative, v0.dcf_cumulative)
+                + head("Equity value (DCF)", v.equity_value_dcf, v0.equity_value_dcf)
+                + head("Lowest cash balance", kp.min_cash, k0.min_cash)
+                + head("CAC (fully loaded)", kp.cac_blended, k0.cac_blended, money, lower_is_better=True)
+                + head("LTV : CAC", kp.ltv_cac_ratio, k0.ltv_cac_ratio, ratio)
+                + "</div>", unsafe_allow_html=True)
+    vs = validation_summary(cur)
+    if vs:
+        st.markdown(f'<div class="c-muted" style="margin:-6px 0 12px">{esc(vs)}</div>', unsafe_allow_html=True)
+
+    named = [("Saved", r0), ("Now", r)] if changed else [(cur.title, r)]
+    a, c = st.columns(2, gap="medium")
+    with a:
+        G.values_chart(named, "cum_dcf", "Daily", f"{k}_g1")
+        G.values_chart(named, "active_customers", "Daily", f"{k}_g3")
+    with c:
+        G.values_chart(named, "cash_balance", "Daily", f"{k}_g2")
+        monthly_cash_chart(r, key=f"{k}_g4")
+    card("Funnel Per Channel", funnel_html(r))
+    unit, rr, cash, val = kpi_tables(kp, v, cur)
+    a, c, d = st.columns(3, gap="medium")
+    card("Unit Economics", unit, a)
+    card("Last 30 Days", rr, c)
+    card("Cash and Customers", cash, d)
+
+
 # ── Main ──────────────────────────────────────────────────────────────
 
 share = qp("share") == "1"
@@ -1320,6 +1636,8 @@ if share:
     st.markdown('<style>[data-testid="stSidebar"],[data-testid="stSidebarCollapsedControl"],'
                 '[data-testid="collapsedControl"],[data-testid="stHeader"]{display:none}</style>',
                 unsafe_allow_html=True)
+elif qp("live") == "1" and qp("state"):
+    pass  # the live page fills the sidebar with inputs
 else:
     client = sidebar(client)
 
@@ -1331,7 +1649,9 @@ if client:
         else:
             st.error("Comparison not found.")
     elif qp("state"):
-        if qp("edit") == "1" and not share:
+        if qp("live") == "1" and not share:
+            render_live(client, qp("state"))
+        elif qp("edit") == "1" and not share:
             render_editor(client, qp("state"))
         else:
             s = load_state(client, qp("state"))

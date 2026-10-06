@@ -11,6 +11,8 @@ streamlit run main.py
 
 Two example clients are included. Pick one in the sidebar.
 
+**Live mode** is for building a model with someone, for example on a sales call: every input sits in the left sidebar in plain units (%, per month, days), and the value, cash, CAC and charts on the right update as you type, with the change against the saved version. Open any state and click Live. "Save as new state" turns the current numbers into a second state and a comparison.
+
 ## Why bottom-up
 
 A business is a set of offers, and a set of channels that bring customers to those offers, and a set of costs for running it. Everything else follows. A top-down model starts from revenue and a growth rate and works down to a margin. This model starts from a channel row that says "300 contacts per day at $0.35 each, 4% contact to lead, 30% of leads interested, 60% of those take a meeting, 22% close, 30-day sales cycle" and works up to cash, profit and value.
