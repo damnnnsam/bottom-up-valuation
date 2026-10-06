@@ -189,6 +189,10 @@ class State:
     shares: int = 1_000_000
     ltv_years: float = 5.0  # LTV horizon; LTV is discounted at discount_rate and net of the transaction fee
     cac_lag_days: int = -1  # spend lag for CAC; -1 = sales-weighted time to market + sales cycle
+    # targets for the discovery view: the most a customer may cost
+    target_payback_months: float = 6.0  # CAC must be earned back (net cash) within this
+    target_ltv_cac: float = 3.0
+    goal_new_customers_per_month: float = 0.0
     # starting state
     starting_cash: float = 0.0
     assets: float = 0.0

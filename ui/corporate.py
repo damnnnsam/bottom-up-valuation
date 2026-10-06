@@ -72,6 +72,8 @@ def inject_css() -> None:
 [data-testid="stSidebar"] {{ background: #ffffff; border-right: 1px solid {RULE}; }}
 [data-testid="stSidebar"] [data-testid="stCaptionContainer"] p {{ text-transform: uppercase; font-size: 11px !important;
     letter-spacing: 0.06em; color: {FAINT} !important; font-weight: 600; margin-top: 10px; }}
+[data-testid="stSidebar"] [data-testid="stExpander"] [data-testid="stCaptionContainer"] p {{ text-transform: none;
+    letter-spacing: 0; font-weight: 400; font-size: 12.5px !important; color: {MUTED} !important; line-height: 1.5; margin-top: 0; }}
 [data-testid="stSidebar"] [data-testid="stBaseButton-secondary"] {{ border: none; background: transparent;
     justify-content: flex-start; padding: 4px 8px; min-height: 0; border-radius: 6px; width: 100%; }}
 [data-testid="stSidebar"] [data-testid="stBaseButton-secondary"] p {{ color: {INK_2}; font-size: 13.5px; text-align: left; }}

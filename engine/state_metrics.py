@@ -245,3 +245,112 @@ def compute_state_valuation(state: State, r: StateResult) -> StateValuation:
         cash_at_valuation=cash_val, net_debt=debt_val - cash_val, shares_at_valuation=sh,
         debt_at_valuation=debt_val,
     )
+
+
+# ── Targets for a discovery call ──────────────────────────────────────
+
+def _offer_payback_curve(o, fee: float, n: int = 3650) -> np.ndarray:
+    """Cumulative cash one new customer brings in, net of delivery, refunds, fees and renewal selling.
+    The first sale's cost to sell is left out: it is part of CAC."""
+    from engine.events import offer_kernel
+    k = offer_kernel(o, n)
+    net = (k["cash_new"] + k["cash_ren"]) * (1 - fee) - k["refund_cost"] - k["ful_new"] - k["ful_ren"] - k["sell_ren"]
+    return np.cumsum(net)
+
+
+def customer_economics(state: State, offer_name: str | None = None) -> dict:
+    """What one customer of an offer is worth, in plain monthly terms."""
+    offers = {o.name: o for o in state.offers}
+    if not offers:
+        return {}
+    o = offers.get(offer_name) or state.offers[0]
+    fee = state.transaction_fee
+    cum = _offer_payback_curve(o, fee)
+    out = {"offer": o.name, "billing": o.billing, "ltv": offer_ltv(o, state.ltv_years, state.discount_rate, fee),
+           "net_3m": float(cum[89]), "net_6m": float(cum[179]), "net_12m": float(cum[359]), "net_24m": float(cum[719])}
+    if o.billing == "contract":
+        m = 30.0 / max(int(o.contract_length), 1)
+        out["price_month"] = o.price * m
+        out["gross_profit_month"] = o.renewal_price * m * (o.realization_rate * (1 - fee) - o.renewal_cost_to_fulfill
+                                                          - o.renewal_cost_to_sell)
+        rr = o.renewal_rate_of_renewals
+        periods = 1.0 + (1.0 - o.churn_rate) / (1.0 - rr) if rr < 1 else float("inf")
+        out["lifetime_months"] = periods * max(int(o.contract_length), 1) / 30.0
+    else:
+        pays = sorted(o.payments or [])
+        out["price_month"] = pays[0][1] if pays else 0.0
+        out["gross_profit_month"] = out["price_month"] * (o.realization_rate * (1 - fee) - o.cost_to_fulfill)
+        out["lifetime_months"] = (pays[-1][0] / 30.0 + 1) if pays else 0.0
+    flat = sum(x.amount_per_day for x in state.expenses if x.start_day <= 0 <= x.end_day) * 30.0
+    per100 = sum(x.per_100_customers_per_day for x in state.expenses if x.start_day <= 0 <= x.end_day) * 30.0
+    out["fixed_month"] = flat
+    margin = out["gross_profit_month"] - per100 / 100.0
+    out["break_even_customers"] = flat / margin if margin > 0 else float("inf")
+    return out
+
+
+def channel_targets(state: State) -> list:
+    """Per marketing row: what it costs now and the most it may cost, from the payback and LTV : CAC targets.
+
+    max CAC        = the lower of (net cash per customer after the payback target) and (LTV / LTV:CAC target)
+    max cost/lead  = (max CAC - cost to sell per sale) x lead-to-customer rate
+    and down the funnel: per click (paid), per contact and per meeting (outbound), per visit (organic)."""
+    from engine.events import _event_rates
+    offers = {o.name: o for o in state.offers}
+    fee = state.transaction_fee
+    curves, ltvs = {}, {}
+    for n_, o in offers.items():
+        curves[n_] = _offer_payback_curve(o, fee)
+        ltvs[n_] = offer_ltv(o, state.ltv_years, state.discount_rate, fee)
+    pay_m = float(getattr(state, "target_payback_months", 6.0) or 0.0)
+    ltvx = float(getattr(state, "target_ltv_cac", 3.0) or 0.0)
+    goal = float(getattr(state, "goal_new_customers_per_month", 0.0) or 0.0)
+    rows = []
+    for e in state.events:
+        if e.driver == "viral":
+            continue
+        mix = {n_: sh for n_, sh in event_mix(e).items() if n_ in offers}
+        if not mix:
+            continue
+        ltv = sum(sh * ltvs[n_] for n_, sh in mix.items())
+        cum = sum(sh * curves[n_] for n_, sh in mix.items())
+        price = sum(sh * offers[n_].price for n_, sh in mix.items())
+        sell = (e.cost_to_sell_override * price if e.cost_to_sell_override >= 0
+                else sum(sh * offers[n_].cost_to_sell * offers[n_].price for n_, sh in mix.items()))
+        idx = int(round(pay_m * 30)) - 1
+        cac_pay = float(cum[min(max(idx, 0), len(cum) - 1)]) if pay_m > 0 else float("inf")
+        cac_ltv = ltv / ltvx if ltvx > 0 else float("inf")
+        max_cac = min(cac_pay, cac_ltv)
+        rule = "payback" if cac_pay <= cac_ltv else "LTV : CAC"
+        cost, reach, eng, ld, sl = _event_rates(e)
+        if e.driver == "outbound":
+            leads = eng
+        else:
+            leads = ld
+        l2c = sl / leads if leads > 0 else 0.0
+        div = lambda a, b: a / b if b > 0 else float("inf")
+        row = dict(title=e.title, driver=e.driver, channel=e.channel, start_day=e.start_day, validated=e.validated,
+                   cost_month=cost * 30, leads_month=leads * 30, customers_month=sl * 30, lead_to_customer=l2c,
+                   cpl=div(cost, leads), cac=div(cost, sl) + sell, sell=sell, ltv=ltv, max_cac=max_cac,
+                   max_cac_payback=cac_pay, max_cac_ltv=cac_ltv, rule=rule,
+                   max_cpl=max((max_cac - sell) * l2c, 0.0), units=[])
+        u = row["units"]  # (label, now, max)
+        if e.driver == "spend":
+            u.append(("Cost per click", div(cost, eng), row["max_cpl"] * e.lead_to_view))
+            if e.cost_per_click <= 0:
+                u.append(("CPM", e.cpm, row["max_cpl"] * e.lead_to_view * e.ctr * 1000))
+        elif e.driver in ("outbound", "team"):
+            c2l = div(leads, reach) if reach > 0 else 0.0
+            u.append(("Cost per contact", div(cost, reach), row["max_cpl"] * c2l))
+            row["contacts_per_customer"] = div(reach, sl)
+            if e.driver == "outbound":
+                u.append(("Cost per meeting", div(cost, ld), max((max_cac - sell) * e.close_rate, 0.0)))
+        elif e.driver == "volume":
+            u.append(("Cost per visit", div(cost, reach), row["max_cpl"] * e.lead_to_view))
+        if goal > 0 and l2c > 0:
+            row["goal_leads_month"] = goal / l2c
+            row["goal_cost_month"] = goal / l2c * row["cpl"] if np.isfinite(row["cpl"]) else float("inf")
+            if e.driver in ("outbound", "team") and reach > 0:
+                row["goal_contacts_month"] = goal * div(reach, sl)
+        rows.append(row)
+    return rows

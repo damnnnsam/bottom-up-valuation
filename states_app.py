@@ -32,7 +32,7 @@ from engine.events import (
     State, Offer, MarketingEvent, FixedExpense, Upgrade, FinancingEvent, simulate, clone_state, split_row,
     build_schedule, state_to_dict, state_from_dict, offer_economics, existing_book, event_mix,
 )
-from engine.state_metrics import compute_state_kpis, compute_state_valuation
+from engine.state_metrics import compute_state_kpis, compute_state_valuation, channel_targets, customer_economics
 from store.client import list_clients, load_client_meta, create_client, delete_client
 from store.states import (
     Comparison, list_states, load_state, save_state, delete_state,
@@ -575,6 +575,8 @@ def render_state(client: str, s: State, share: bool) -> None:
         with b:
             cash_chart([(s.title, r)], key=f"cash_{s.id}")
             G.by_channel_chart(r, f"ovch_{s.id}", "Monthly")
+        card(f"Targets (payback in {num(s.target_payback_months)} months, LTV : CAC {num(s.target_ltv_cac)})",
+             targets_html(s))
         card("Marketing Events", events_html(s))
     elif sec == "Graphs":
         view, mode = G.picker(s.id)
@@ -1316,6 +1318,62 @@ def sidebar(client: str | None) -> str | None:
     return pick
 
 
+def targets_html(s: State) -> str:
+    """Raw targets table: per channel, now vs the most it may cost; plus what one customer is worth."""
+    ce = customer_economics(s)
+    rows = []
+    def cell(now, mx, fmt=money):
+        if not (np.isfinite(now) and np.isfinite(mx)):
+            return fmt(now) if np.isfinite(now) else "–", fmt(mx) if np.isfinite(mx) else "–"
+        cls = "c-pos" if now <= mx else "c-neg"
+        return f'<span class="{cls}">{fmt(now)}</span>', fmt(mx)
+    ts = channel_targets(s)
+    goal = s.goal_new_customers_per_month > 0
+    funnel = []
+    for t in ts:
+        cpl_now, cpl_max = cell(t["cpl"], t["max_cpl"])
+        cac_now, cac_max = cell(t["cac"], t["max_cac"])
+        row = [esc(t["title"]), num(round(t["customers_month"], 2)), num(round(t["leads_month"], 1)),
+               rate(t["lead_to_customer"]), cpl_now, cpl_max, cac_now, cac_max]
+        if goal:
+            g = f"{num(round(t['goal_leads_month']))}" if "goal_leads_month" in t else "–"
+            c = money(t["goal_cost_month"], 0) if np.isfinite(t.get("goal_cost_month", float("inf"))) else "–"
+            row += [g, c]
+        rows.append(row)
+        for lbl, nw, mx in t["units"]:
+            n_, m_ = cell(nw, mx)
+            funnel.append([esc(t["title"]), esc(lbl), n_, m_])
+        if "contacts_per_customer" in t and np.isfinite(t["contacts_per_customer"]):
+            funnel.append([esc(t["title"]), "Contacts per customer", num(round(t["contacts_per_customer"])), "–"])
+    heads = ["Channel", "Customers / mo", "Leads / mo", "Lead → customer", "Cost per lead", "Max cost per lead",
+             "CAC", "Max CAC"]
+    if goal:
+        heads += [f"Leads / mo for {num(s.goal_new_customers_per_month)} customers", "Cost / mo at today's cost per lead"]
+    tbl = table(heads, rows, num_cols=set(range(1, len(heads)))) if rows else '<div class="c-muted">No channels yet.</div>'
+    if ts:
+        rule = ts[0]["rule"]
+        tbl += (f'<div class="c-muted" style="font-size:12.5px;margin:6px 0 14px">Max CAC is set by the '
+                f'{"payback target" if rule == "payback" else "LTV : CAC target"}, whichever allows less. '
+                f'Max cost per lead = (max CAC minus cost to sell) x lead to customer. Green = under the max, red = over.</div>')
+    if funnel:
+        tbl += table(["Channel", "Down the funnel", "Now", "Max"], funnel, num_cols={2, 3})
+    if not ce:
+        return tbl
+    life = ce["lifetime_months"]
+    kv = table([], [
+        ["Price per month", money(ce["price_month"])],
+        ["Gross profit per customer per month", money(ce["gross_profit_month"])],
+        ["Average lifetime", f"{life:,.1f} months" if np.isfinite(life) else "No churn"],
+        [f"LTV ({num(s.ltv_years)} years, discounted)", money(ce["ltv"])],
+        ["Net cash per customer after 3 / 6 / 12 months",
+         f"{money(ce['net_3m'])} / {money(ce['net_6m'])} / {money(ce['net_12m'])}"],
+        ["Fixed costs per month", money(ce["fixed_month"])],
+        ["Customers needed to cover fixed costs", num(round(ce["break_even_customers"], 1))
+         if np.isfinite(ce["break_even_customers"]) else "–"],
+    ], kv=True)
+    return tbl + f'<div style="margin-top:14px;max-width:560px">{kv}</div>'
+
+
 # ── Live mode: every input in the sidebar, results update as you type ──
 
 LIVE_NEW_ROWS = {
@@ -1394,8 +1452,32 @@ def render_live(client: str, sid: str) -> None:
     if nav[2].button("Client", key=f"{k}_home"):
         go_to(client=client)
 
+    # Offers
+    with sb.expander("1 · Offer", expanded=True):
+        st.caption('Ask: What do you sell and at what price? Monthly or annual? Of 10 new customers, how many are gone after the first period, and how many leave per period after that? What does delivering it cost, as a share of the price? Sales commission? How fast do you get paid?')
+        for j, o in enumerate(cur.offers):
+            st.markdown(f"**{esc(o.name)}**")
+            if o.billing == "schedule":
+                st.caption(f"Payment schedule with {len(o.payments)} payments: edit it in Tables.")
+                continue
+            def _so(attr, o=o):
+                return lambda v: setattr(o, attr, v)
+            old_ful, old_sell_ren = o.cost_to_fulfill, o.renewal_cost_to_fulfill
+            _pairs(st, [("Price", o.price, "money", f"{k}_op_{j}", _so("price")),
+                        ("Contract length (days)", o.contract_length, "int", f"{k}_ol_{j}", _so("contract_length")),
+                        ("Churn at first renewal", o.churn_rate, "pct", f"{k}_oc_{j}", _so("churn_rate")),
+                        ("Renewal rate after that", o.renewal_rate_of_renewals, "pct", f"{k}_orr_{j}",
+                         _so("renewal_rate_of_renewals")),
+                        ("Renewal price", o.renewal_price, "money", f"{k}_orp_{j}", _so("renewal_price")),
+                        ("Cost to fulfil", o.cost_to_fulfill, "pct", f"{k}_of_{j}", _so("cost_to_fulfill")),
+                        ("Cost to sell", o.cost_to_sell, "pct", f"{k}_os_{j}", _so("cost_to_sell")),
+                        ("Time to collect (days)", o.time_to_collect, "int", f"{k}_ot_{j}", _so("time_to_collect"))])
+            if abs(old_sell_ren - old_ful) < 1e-12:  # same delivery cost on renewals: keep them together
+                o.renewal_cost_to_fulfill = o.cost_to_fulfill
+
     # Starting state
-    with sb.expander("Starting state", expanded=False):
+    with sb.expander("2 · Today", expanded=False):
+        st.caption('Ask: How many paying customers today, on which offer? Cash in the bank? Any debt? Payment provider fee?')
         book = existing_book(cur)
         def _set(attr):
             return lambda v: setattr(cur, attr, v)
@@ -1417,31 +1499,39 @@ def render_live(client: str, sid: str) -> None:
         cur.existing_customers = float(sum(cur.existing_by_offer.values()))
         cur.existing_customers_offer = max(cur.existing_by_offer, key=cur.existing_by_offer.get) if cur.existing_by_offer else ""
 
-    # Offers
-    with sb.expander("Offers", expanded=False):
-        for j, o in enumerate(cur.offers):
-            st.markdown(f"**{esc(o.name)}**")
-            if o.billing == "schedule":
-                st.caption(f"Payment schedule with {len(o.payments)} payments: edit it in Tables.")
-                continue
-            def _so(attr, o=o):
-                return lambda v: setattr(o, attr, v)
-            old_ful, old_sell_ren = o.cost_to_fulfill, o.renewal_cost_to_fulfill
-            _pairs(st, [("Price", o.price, "money", f"{k}_op_{j}", _so("price")),
-                        ("Contract length (days)", o.contract_length, "int", f"{k}_ol_{j}", _so("contract_length")),
-                        ("Churn at first renewal", o.churn_rate, "pct", f"{k}_oc_{j}", _so("churn_rate")),
-                        ("Renewal rate after that", o.renewal_rate_of_renewals, "pct", f"{k}_orr_{j}",
-                         _so("renewal_rate_of_renewals")),
-                        ("Renewal price", o.renewal_price, "money", f"{k}_orp_{j}", _so("renewal_price")),
-                        ("Cost to fulfil", o.cost_to_fulfill, "pct", f"{k}_of_{j}", _so("cost_to_fulfill")),
-                        ("Cost to sell", o.cost_to_sell, "pct", f"{k}_os_{j}", _so("cost_to_sell")),
-                        ("Time to collect (days)", o.time_to_collect, "int", f"{k}_ot_{j}", _so("time_to_collect"))])
-            if abs(old_sell_ren - old_ful) < 1e-12:  # same delivery cost on renewals: keep them together
-                o.renewal_cost_to_fulfill = o.cost_to_fulfill
+    # Fixed costs
+    with sb.expander("3 · Fixed costs", expanded=False):
+        st.caption('Ask: What does the business cost per month before marketing: team, rent, tools? Mark growth and sales people as sales & marketing. Does it grow with customers (support, account managers)?')
+        remove = None
+        for i, x in enumerate(cur.expenses):
+            box = st.container(border=True)
+            h = box.columns([5, 1])
+            h[0].markdown(f"**{esc(x.title)}**", unsafe_allow_html=True)
+            if h[1].button("✕", key=f"{k}_xrm_{i}"):
+                remove = i
+            def _sx(attr, x=x):
+                return lambda v: setattr(x, attr, v)
+            items = [("Per month", x.amount_per_day, "money_m", f"{k}_xa_{i}", _sx("amount_per_day")),
+                     ("Per 100 customers per month", x.per_100_customers_per_day, "money_m", f"{k}_xp_{i}",
+                      _sx("per_100_customers_per_day")),
+                     ("Start day", x.start_day, "int", f"{k}_xs_{i}", _sx("start_day")),
+                     ("End day", x.end_day, "int", f"{k}_xe_{i}", _sx("end_day"))]
+            _pairs(box, items)
+            x.sales_marketing = box.checkbox("Sales & marketing (counts toward CAC)", x.sales_marketing, key=f"{k}_xsm_{i}")
+        if remove is not None:
+            cur.expenses.pop(remove)
+            _set_draft(sid, cur)
+        a = st.columns([4, 2])
+        nt = a[0].text_input("New cost", "", key=f"{k}_xnew", placeholder="e.g. Head of Sales",
+                             label_visibility="collapsed")
+        if a[1].button("Add", key=f"{k}_xadd") and nt.strip():
+            cur.expenses.append(FixedExpense(nt.strip(), "", 0, int(cur.time_span) - 1, 5000 / 30, employee=True))
+            _set_draft(sid, cur)
 
     # Marketing channels
     offer_names = [o.name for o in cur.offers]
-    with sb.expander("Marketing channels", expanded=True):
+    with sb.expander("4 · Channels", expanded=True):
+        st.caption('Ask per channel: When does it start? Paid: budget per month, CPM (or cost per click), click-through rate, % of clicks that become a lead, % of leads that buy. Outbound: contacts per month, cost, % of contacts that become a lead, % of leads that buy. Days from first touch to closed deal. Measured or a guess? Tick Validated only if measured.')
         remove = None
         for i, e in enumerate(cur.events):
             spec = next((t for t in CHANNEL_TYPES if t[0] == e.driver), None)
@@ -1480,37 +1570,18 @@ def render_live(client: str, sid: str) -> None:
             cur.events.append(e)
             _set_draft(sid, cur)
 
-    # Fixed costs
-    with sb.expander("Fixed costs", expanded=False):
-        remove = None
-        for i, x in enumerate(cur.expenses):
-            box = st.container(border=True)
-            h = box.columns([5, 1])
-            h[0].markdown(f"**{esc(x.title)}**", unsafe_allow_html=True)
-            if h[1].button("✕", key=f"{k}_xrm_{i}"):
-                remove = i
-            def _sx(attr, x=x):
-                return lambda v: setattr(x, attr, v)
-            items = [("Per month", x.amount_per_day, "money_m", f"{k}_xa_{i}", _sx("amount_per_day")),
-                     ("Per 100 customers per month", x.per_100_customers_per_day, "money_m", f"{k}_xp_{i}",
-                      _sx("per_100_customers_per_day")),
-                     ("Start day", x.start_day, "int", f"{k}_xs_{i}", _sx("start_day")),
-                     ("End day", x.end_day, "int", f"{k}_xe_{i}", _sx("end_day"))]
-            _pairs(box, items)
-            x.sales_marketing = box.checkbox("Sales & marketing (counts toward CAC)", x.sales_marketing, key=f"{k}_xsm_{i}")
-        if remove is not None:
-            cur.expenses.pop(remove)
-            _set_draft(sid, cur)
-        a = st.columns([4, 2])
-        nt = a[0].text_input("New cost", "", key=f"{k}_xnew", placeholder="e.g. Head of Sales",
-                             label_visibility="collapsed")
-        if a[1].button("Add", key=f"{k}_xadd") and nt.strip():
-            cur.expenses.append(FixedExpense(nt.strip(), "", 0, int(cur.time_span) - 1, 5000 / 30, employee=True))
-            _set_draft(sid, cur)
+    # Targets
+    with sb.expander("5 · Targets", expanded=False):
+        st.caption("Ask: How fast must a new customer pay back what it cost to win them? How many new customers a month do you want? These set the max cost per customer, lead, click and contact on the right.")
+        _pairs(st, [("Payback target (months)", cur.target_payback_months, "num", f"{k}_tpm",
+                     lambda v: setattr(cur, "target_payback_months", v)),
+                    ("LTV : CAC target", cur.target_ltv_cac, "num", f"{k}_tlc", lambda v: setattr(cur, "target_ltv_cac", v)),
+                    ("New customers wanted per month", cur.goal_new_customers_per_month, "num", f"{k}_tg",
+                     lambda v: setattr(cur, "goal_new_customers_per_month", v))])
 
     # Upgrades
     if cur.upgrades:
-        with sb.expander("Upgrades between offers", expanded=False):
+        with sb.expander("Optional · Upgrades between offers", expanded=False):
             items = []
             for i, u in enumerate(cur.upgrades):
                 items.append((f"{u.from_offer} → {u.to_offer} per month", u.monthly_rate, "pct", f"{k}_u_{i}",
@@ -1518,7 +1589,7 @@ def render_live(client: str, sid: str) -> None:
             _pairs(st, items)
 
     # Financing
-    with sb.expander("Financing", expanded=False):
+    with sb.expander("Optional · Financing", expanded=False):
         remove = None
         for i, f in enumerate(cur.financing):
             box = st.container(border=True)
@@ -1550,7 +1621,7 @@ def render_live(client: str, sid: str) -> None:
             _set_draft(sid, cur)
 
     # Valuation
-    with sb.expander("Valuation", expanded=False):
+    with sb.expander("Optional · Valuation settings", expanded=False):
         def _set(attr):
             return lambda v: setattr(cur, attr, v)
         _pairs(st, [("Days simulated", cur.time_span, "int", f"{k}_ts", _set("time_span")),
@@ -1612,6 +1683,8 @@ def render_live(client: str, sid: str) -> None:
     if vs:
         st.markdown(f'<div class="c-muted" style="margin:-6px 0 12px">{esc(vs)}</div>', unsafe_allow_html=True)
 
+    card(f"Targets (payback in {num(cur.target_payback_months)} months, LTV : CAC {num(cur.target_ltv_cac)})",
+         targets_html(cur))
     named = [("Saved", r0), ("Now", r)] if changed else [(cur.title, r)]
     a, c = st.columns(2, gap="medium")
     with a:
