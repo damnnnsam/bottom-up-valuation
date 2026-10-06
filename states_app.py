@@ -200,9 +200,9 @@ TYPE_CHANNELS = {
 }
 CHANNEL_TYPES = [
     ("spend", "Paid Ads", "Paid Advertising",
-     "Search: set cost per click. Display and social: leave CPC empty and use CPM and CTR. "
-     "Clicks become leads (signups, trials, demo requests), leads become customers.",
-     [("Spend Per Month", "spend_per_day", "money_m"), ("Cost Per Click", "cost_per_click", "money"),
+     "Display and social: give CPM and CTR, cost per click follows (CPM / 1,000 / CTR). Search: give cost per click "
+     "instead and leave CPM at 0. Clicks become leads (signups, trials, demo requests), leads become customers.",
+     [("Spend Per Month", "spend_per_day", "money_m"), ("Cost Per Click (optional)", "cost_per_click", "money"),
       ("CPM", "cpm", "money"), ("CTR", "ctr", "pct"),
       ("Click To Lead", "lead_to_view", "pct"), ("Lead To Customer", "sale_to_lead", "pct")]),
     ("outbound", "Outbound", "Outbound Prospecting",
@@ -233,6 +233,12 @@ CHANNEL_TYPES = [
 
 def _ev_display(e, attr, kind):
     v = getattr(e, attr)
+    if attr == "cost_per_click" and not v:  # derived from CPM and CTR unless set directly
+        if e.cpm > 0 and e.ctr > 0:
+            return f'{money(e.cpm / (1000.0 * e.ctr))} <span class="c-muted" style="font-size:11px">from CPM</span>'
+        return "–"
+    if attr == "cpm" and e.cost_per_click > 0:  # the other way round: CPC given, CPM is derived
+        return f'{money(e.cost_per_click * e.ctr * 1000.0)} <span class="c-muted" style="font-size:11px">from CPC</span>' if e.ctr > 0 else "–"
     if kind == "offer":
         return esc(mix_to_text(e.offer_mix)) if e.offer_mix else red(e.offer)
     if kind in ("text", "channel", "note"):
