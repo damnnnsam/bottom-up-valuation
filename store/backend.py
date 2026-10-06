@@ -16,9 +16,13 @@ from typing import Any
 # ── Environment detection ──────────────────────────────────────────────
 
 def _is_streamlit_cloud() -> bool:
-    """Detect if we're running on Streamlit Cloud."""
-    return os.environ.get("STREAMLIT_SHARING_MODE") is not None or \
-           os.environ.get("STREAMLIT_SERVER_HEADLESS") == "true"
+    """GitHub-backed storage: only when asked for (DATA_BACKEND=github) or on Streamlit Community Cloud.
+    Any other server (Railway, a VPS, headless local run) uses the files under data/clients/."""
+    if os.environ.get("DATA_BACKEND", "").lower() == "github":
+        return True
+    if os.environ.get("DATA_BACKEND", "").lower() == "files":
+        return False
+    return os.environ.get("STREAMLIT_SHARING_MODE") is not None
 
 
 def _get_data_root() -> Path:
