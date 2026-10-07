@@ -204,6 +204,9 @@ class State:
     existing_customers_offer: str = ""
     existing_by_offer: dict = field(default_factory=dict)  # {offer: count}; overrides the two fields above
     total_addressable_market: float = 0.0  # 0 = no cap
+    # Existing customers renew on different days of the period, not all on day 0. True spreads their
+    # renewals, cash and churn evenly over one contract period; False bills them all together.
+    stagger_existing: bool = True
     transaction_fee: float = 0.0  # fraction of cash collected
     # rows
     offers: list = field(default_factory=list)
@@ -568,6 +571,22 @@ def simulate_financing(state: State, T: int) -> dict:
             "debt_outstanding": debt, "shares_outstanding": shares}
 
 
+def _stagger(kernel: dict, L: int, T: int) -> dict:
+    """Average a per-customer kernel over L start offsets (0 .. L-1): what a cohort whose renewal dates
+    are spread evenly over one period does per customer. A customer whose cycle starts on day j is
+    active from day 0 (they are an existing customer); their cash and churn follow the kernel from day j."""
+    L = max(min(int(L), T), 1)
+    out = {f: np.zeros(T) for f in kernel}
+    for j in range(L):
+        for f, arr in kernel.items():
+            out[f][j:] += arr[:T - j]
+            if f == "active" and j:
+                out[f][:j] += arr[0]
+    for f in out:
+        out[f] /= L
+    return out
+
+
 def _window(start, end, T):
     s, e = max(int(start), 0), min(int(end), T - 1)
     return (s, e) if e >= s else None
@@ -649,9 +668,18 @@ def simulate(state: State) -> StateResult:
     ex_kernels = {}
     for name in set(book) | {u.from_offer for u in ups} | {u.to_offer for u in ups}:
         ex_kernels[name] = offer_kernel(offers[name], T, existing=True)
+    # Existing customers: spread each offer's book evenly over one contract period
+    book_kernels = {}
+    for name in book:
+        if state.stagger_existing:
+            o = offers[name]
+            L = max(int(o.contract_length), 1) if o.billing == "contract" else 30
+            book_kernels[name] = _stagger(ex_kernels[name], L, T)
+        else:
+            book_kernels[name] = ex_kernels[name]
     for name, n in book.items():
-        active += n * ex_kernels[name]["active"]
-        active_by_offer[name] += n * ex_kernels[name]["active"]
+        active += n * book_kernels[name]["active"]
+        active_by_offer[name] += n * book_kernels[name]["active"]
     mixes = [event_mix(ev) for ev in state.events]
     up_in = {name: np.zeros(T) for name in offers}
     up_out = {name: np.zeros(T) for name in offers}
@@ -716,7 +744,7 @@ def simulate(state: State) -> StateResult:
         else:
             revenue_by_offer[name] = np.zeros(T)
     for name, n in book.items():
-        ek = ex_kernels[name]
+        ek = book_kernels[name]
         for f in KERNEL_FIELDS:
             if f != "active":
                 agg[f] += n * ek[f]
