@@ -18,7 +18,8 @@ inject_css()
 
 
 def _guest_passwords() -> dict:
-    """CLIENT_PASSWORDS="gleap:abc,axisbrands:def" gives each client its own login."""
+    """CLIENT_PASSWORDS="gleap:abc,axisbrands:def": each client's key. Used in the link (?client=gleap&key=abc)
+    or typed on the sign-in screen; it opens that client only."""
     out = {}
     for part in os.environ.get("CLIENT_PASSWORDS", "").split(","):
         if ":" in part:
@@ -34,6 +35,19 @@ def _gate() -> None:
     guests = _guest_passwords()
     if (not admin and not guests) or st.query_params.get("share") == "1" or st.session_state.get("_authed"):
         return
+    # A client's link carries its key: ?client=gleap&key=... opens that client, nothing else, no sign-in screen.
+    key = st.query_params.get("key", "")
+    if key:
+        for slug, pw in guests.items():
+            if pw and key == pw:
+                st.session_state["_authed"] = True
+                st.session_state["_scope"] = slug
+                params = {k: v for k, v in st.query_params.to_dict().items() if k != "key"}
+                params["client"] = slug
+                st.query_params.clear()
+                for k, v in params.items():
+                    st.query_params[k] = v
+                st.rerun()
     st.markdown('<div style="max-width:360px;margin:12vh auto 0"><h3 style="margin-bottom:4px">Sign in</h3>'
                 '<p style="color:#555;font-size:13px">Enter the password you were given.</p></div>', unsafe_allow_html=True)
     _, c, _ = st.columns([1, 1.2, 1])
