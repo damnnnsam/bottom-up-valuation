@@ -1192,7 +1192,7 @@ def render_comparison(client: str, comp: Comparison, share: bool) -> None:
             deltas.append(signed(x - vals[0], fmt if fmt in (money,) else (lambda z: num(round(z, 2 if abs(z) < 100 else 0))),
                                  lower_is_better=None if label in NEUTRAL else label in LOWER_IS_BETTER) if ok else "\u2013")
         rows.append([esc(label)] + [fmt(x) for x in vals] + deltas)
-    card("Key Metrics", table(heads, rows, num_cols=set(range(1, len(heads)))))
+    card("", table(heads, rows, num_cols=set(range(1, len(heads)))))
     a, b = st.columns(2, gap="medium")
     with a:
         card(f"Targets: {short[0]} (payback in {num(states[0].target_payback_months)} months, "

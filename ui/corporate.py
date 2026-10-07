@@ -16,33 +16,35 @@ import plotly.graph_objects as go
 import plotly.io as pio
 import streamlit as st
 
-FONT = '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif'
-INK = "#0f172a"
-INK_2 = "#334155"
-MUTED = "#64748b"
-FAINT = "#94a3b8"
-RULE = "#e2e8f0"
-HAIR = "#f1f5f9"
-BG = "#f8fafc"
+FONT = 'Helvetica, Arial, sans-serif'
+INK = "#000000"
+INK_2 = "#222222"
+MUTED = "#555555"
+FAINT = "#777777"
+RULE = "#c8c8c8"
+HAIR = "#e4e4e4"
+BG = "#ffffff"
 NAVY = "#0b2545"
-ACCENT = "#1d4ed8"
-POS = "#047857"
-RED = "#b91c1c"
-GOLD = "#b45309"
-NAVY_ROW = HAIR  # kept for older imports
-ROW_ALT = HAIR
-# first colour is the baseline (dark), the rest are the alternatives
-PALETTE = ["#0f172a", "#2563eb", "#0d9488", "#d97706", "#7c3aed", "#db2777", "#64748b"]
+ACCENT = "#0000ee"
+POS = "#1a7f37"
+RED = "#b00020"
+GOLD = "#c9a227"
+NAVY_ROW = "#13315c"
+ROW_ALT = "#ffffff"
+# baseline first (gold, as in the original tool), then navy, then plain colours
+PALETTE = [GOLD, NAVY, "#4a5a6a", "#8a1c1c", "#2b6f3a", "#6b4f9a", "#000000"]
 
 pio.templates["corporate"] = go.layout.Template(layout=go.Layout(
-    font=dict(family=FONT, size=12, color=INK_2),
-    title=dict(font=dict(family=FONT, size=14, color=INK, weight=600), x=0.01),
+    font=dict(family=FONT, size=12, color=INK),
+    title=dict(font=dict(family=FONT, size=15, color=INK, weight=700), x=0.0),
     colorway=PALETTE,
     paper_bgcolor="#ffffff", plot_bgcolor="#ffffff",
-    xaxis=dict(gridcolor=HAIR, zeroline=False, showline=False, ticks="", tickfont=dict(color=MUTED, size=11)),
-    yaxis=dict(gridcolor=HAIR, zeroline=False, showline=False, ticks="", tickfont=dict(color=MUTED, size=11)),
-    legend=dict(font=dict(size=12, color=INK_2)),
-    hoverlabel=dict(font=dict(family=FONT, size=12), bgcolor="#ffffff", bordercolor=RULE),
+    xaxis=dict(gridcolor="#dddddd", zeroline=False, showline=True, linecolor="#888888", ticks="outside",
+               tickcolor="#888888", tickfont=dict(color=INK, size=11)),
+    yaxis=dict(gridcolor="#dddddd", zeroline=False, showline=True, linecolor="#888888", ticks="outside",
+               tickcolor="#888888", tickfont=dict(color=INK, size=11)),
+    legend=dict(font=dict(size=12, color=INK)),
+    hoverlabel=dict(font=dict(family=FONT, size=12), bgcolor=NAVY, font_color="#ffffff", bordercolor=NAVY),
 ))
 pio.templates.default = "corporate"
 
@@ -50,137 +52,115 @@ pio.templates.default = "corporate"
 def inject_css() -> None:
     st.markdown(f"""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-.stApp {{ background: {BG}; }}
+.stApp {{ background: #ffffff; }}
 .stApp, .stApp p, .stApp li, .stApp label, .stApp input, .stApp textarea, .stApp button, .stApp td, .stApp th,
 .stApp [data-testid="stMarkdownContainer"], .stApp [data-testid="stWidgetLabel"],
 .stApp [data-testid="stExpander"] summary, .stApp [data-baseweb="select"],
 .stApp [data-testid="stCaptionContainer"], .stApp [data-testid="stSidebarNav"] span {{
-    font-family: {FONT} !important; font-feature-settings: "tnum" 1, "cv11" 1; letter-spacing: -0.003em; }}
-.stApp p, .stApp li, .stApp label {{ font-size: 14px; line-height: 1.55; color: {INK_2}; }}
-.stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5 {{ font-family: {FONT} !important;
-    font-weight: 600 !important; color: {INK} !important; letter-spacing: -0.015em; }}
-.stApp h4 {{ font-size: 15px !important; margin: 26px 0 4px; }}
-.stApp h5 {{ font-size: 14px !important; margin: 18px 0 2px; }}
-[data-testid="stCaptionContainer"] p {{ color: {MUTED} !important; font-size: 13px !important; }}
-[data-testid="stToolbar"], [data-testid="stDecoration"] {{ display: none; }}
+    font-family: {FONT} !important; letter-spacing: 0; }}
+.stApp p, .stApp li, .stApp label {{ font-size: 13px; line-height: 1.45; color: {INK}; }}
+.stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5 {{ font-family: {FONT} !important; font-weight: 700 !important;
+    color: {INK} !important; letter-spacing: 0; }}
+.stApp h4 {{ font-size: 15px !important; margin: 22px 0 4px; }}
+.stApp h5 {{ font-size: 13px !important; margin: 14px 0 2px; }}
+[data-testid="stCaptionContainer"] p {{ color: {MUTED} !important; font-size: 12px !important; }}
+[data-testid="stToolbar"], [data-testid="stDecoration"], [data-testid="stHeaderActionElements"] {{ display: none; }}
 [data-testid="stHeader"] {{ background: transparent; }}
-.block-container {{ padding-top: 2.2rem; padding-bottom: 4rem; max-width: 1440px; }}
+.block-container {{ padding-top: 1.6rem; padding-bottom: 3rem; max-width: 100%; }}
 [data-testid="stNumberInputStepDown"], [data-testid="stNumberInputStepUp"] {{ display: none; }}
 
 /* sidebar */
-[data-testid="stSidebar"] {{ background: #ffffff; border-right: 1px solid {RULE}; }}
-[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p {{ text-transform: uppercase; font-size: 11px !important;
-    letter-spacing: 0.06em; color: {FAINT} !important; font-weight: 600; margin-top: 10px; }}
-[data-testid="stSidebar"] [data-testid="stExpander"] [data-testid="stCaptionContainer"] p {{ text-transform: none;
-    letter-spacing: 0; font-weight: 400; font-size: 12.5px !important; color: {MUTED} !important; line-height: 1.5; margin-top: 0; }}
+[data-testid="stSidebar"] {{ background: #f4f4f4; border-right: 1px solid {RULE}; }}
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p {{ font-size: 12px !important; color: {INK} !important;
+    font-weight: 700; margin-top: 10px; }}
+[data-testid="stSidebar"] [data-testid="stExpander"] [data-testid="stCaptionContainer"] p {{ font-weight: 400;
+    color: {MUTED} !important; line-height: 1.45; margin-top: 0; }}
 [data-testid="stSidebar"] [data-testid="stBaseButton-secondary"] {{ border: none; background: transparent;
-    justify-content: flex-start; padding: 4px 8px; min-height: 0; border-radius: 6px; width: 100%; }}
-[data-testid="stSidebar"] [data-testid="stBaseButton-secondary"] p {{ color: {INK_2}; font-size: 13.5px; text-align: left; }}
-[data-testid="stSidebar"] [data-testid="stBaseButton-secondary"]:hover {{ background: {HAIR}; }}
-[data-testid="stSidebar"] [data-testid="stExpander"] details {{ border: none; background: transparent; }}
-[data-testid="stSidebar"] [data-testid="stExpander"] summary p {{ font-size: 13px; color: {MUTED}; }}
+    justify-content: flex-start; padding: 1px 4px; min-height: 0; border-radius: 0; width: 100%; }}
+[data-testid="stSidebar"] [data-testid="stBaseButton-secondary"] p {{ color: {ACCENT}; font-size: 13px; text-align: left;
+    text-decoration: underline; }}
+[data-testid="stSidebar"] [data-testid="stExpander"] details {{ border: 1px solid {RULE}; border-radius: 0; background: #fff; }}
+[data-testid="stSidebar"] [data-testid="stExpander"] summary p {{ font-size: 13px; color: {INK}; font-weight: 700; }}
 
-/* buttons and inputs */
-.stApp [data-testid="stBaseButton-primary"] {{ background: {NAVY}; border: 1px solid {NAVY}; border-radius: 8px; }}
+/* buttons and inputs: square, plain */
+.stApp [data-testid="stBaseButton-primary"] {{ background: {NAVY}; border: 1px solid {NAVY}; border-radius: 0; }}
 .stApp [data-testid="stBaseButton-primary"]:hover {{ background: #13315c; border-color: #13315c; }}
-.stApp [data-testid="stBaseButton-primary"] p {{ color: #ffffff !important; font-weight: 500; }}
+.stApp [data-testid="stBaseButton-primary"] p {{ color: #ffffff !important; }}
 .stApp [data-testid="stBaseButton-primary"]:disabled {{ opacity: 0.35; }}
-.stApp [data-testid="stBaseButton-secondary"] {{ border-radius: 8px; border-color: {RULE}; }}
-.stApp [data-baseweb="input"], .stApp [data-baseweb="select"] > div, .stApp textarea {{ border-radius: 8px !important; }}
-[data-testid="stExpander"] details {{ background: #fff; border: 1px solid {RULE}; border-radius: 10px; }}
-[data-testid="stExpander"] summary p {{ font-weight: 500; color: {INK_2}; }}
+.stApp [data-testid="stBaseButton-secondary"] {{ border-radius: 0; border-color: {RULE}; }}
+.stApp [data-baseweb="input"], .stApp [data-baseweb="select"] > div, .stApp textarea {{ border-radius: 0 !important; }}
+[data-testid="stExpander"] details {{ background: #fff; border: 1px solid {RULE}; border-radius: 0; }}
+[data-testid="stExpander"] summary p {{ font-weight: 700; color: {INK}; }}
 
-/* tabs: segmented controls drawn as underline tabs */
-[data-testid="stButtonGroup"] {{ margin: 6px 0 14px; }}
-[data-testid="stButtonGroup"] > div {{ gap: 2px !important; flex-wrap: wrap; border-bottom: 1px solid {RULE}; }}
-[data-testid="stButtonGroup"] button {{ background: transparent !important; border: none !important;
-    border-radius: 0 !important; border-bottom: 2px solid transparent !important; padding: 8px 10px !important;
-    min-height: 0 !important; margin-bottom: -1px; box-shadow: none !important; }}
-[data-testid="stButtonGroup"] button p {{ color: {MUTED} !important; font-size: 13.5px !important; font-weight: 500 !important; }}
-[data-testid="stButtonGroup"] button:hover p {{ color: {INK} !important; }}
-[data-testid="stButtonGroup"] button[kind="segmented_controlActive"] {{ border-bottom-color: {INK} !important; }}
-[data-testid="stButtonGroup"] button[kind="segmented_controlActive"] p {{ color: {INK} !important; }}
+/* section switches: plain links */
+[data-testid="stButtonGroup"] {{ margin: 4px 0 10px; }}
+[data-testid="stButtonGroup"] > div {{ gap: 14px !important; flex-wrap: wrap; }}
+[data-testid="stButtonGroup"] button {{ background: transparent !important; border: none !important; border-radius: 0 !important;
+    padding: 2px 0 !important; min-height: 0 !important; box-shadow: none !important; }}
+[data-testid="stButtonGroup"] button p {{ color: {ACCENT} !important; font-size: 13px !important; text-decoration: underline; }}
+[data-testid="stButtonGroup"] button[kind="segmented_controlActive"] p {{ color: {INK} !important; font-weight: 700;
+    text-decoration: none; }}
 
-/* cards */
-.c-card {{ background: #fff; border: 1px solid {RULE}; border-radius: 12px; padding: 18px 20px 16px;
-          margin-bottom: 18px; }}
-.c-card h4 {{ font-family: {FONT}; font-size: 14px; font-weight: 600 !important; color: {INK};
-             margin: 0 0 10px !important; padding: 0 !important; letter-spacing: -0.01em; }}
-[data-testid="stPlotlyChart"] {{ background: #fff; border: 1px solid {RULE}; border-radius: 12px; padding: 6px 4px 0;
-    overflow: hidden; margin-bottom: 4px; }}
+/* sections, not cards */
+.c-card {{ background: transparent; border: none; border-radius: 0; padding: 0; margin: 0 0 22px; }}
+.c-card h4 {{ font-family: {FONT}; font-size: 15px; font-weight: 700 !important; color: {INK}; margin: 0 0 6px !important;
+             padding: 0 !important; }}
+[data-testid="stPlotlyChart"] {{ background: transparent; border: none; border-radius: 0; padding: 0; margin-bottom: 8px; }}
 
-/* tables: no header bar, hairlines, numbers right-aligned */
+/* tables: bordered, navy header, dense */
 .c-scroll {{ overflow-x: auto; }}
-table.c-t {{ font-family: {FONT}; border-collapse: collapse; width: 100%; font-size: 13.5px;
-            white-space: nowrap; color: {INK}; margin: 0; font-feature-settings: "tnum" 1; }}
-table.c-t th {{ background: transparent; color: {MUTED}; text-align: left; padding: 8px 12px; font-weight: 500;
-               font-size: 12px; border: none; border-bottom: 1px solid {RULE}; white-space: normal; vertical-align: bottom;
-               line-height: 1.3; min-width: 72px; }}
-table.c-t td {{ padding: 9px 10px; border: none; border-bottom: 1px solid {HAIR}; font-weight: 400; color: {INK}; }}
-table.c-t tr:last-child td {{ border-bottom: none; }}
-table.c-t tbody tr:hover td {{ background: {BG}; }}
+table.c-t {{ font-family: {FONT}; border-collapse: collapse; width: auto; min-width: 50%; font-size: 13px;
+            white-space: nowrap; color: {INK}; margin: 0; }}
+table.c-t th {{ background: {NAVY}; color: #fff; text-align: left; padding: 5px 9px; font-weight: 700; font-size: 12px;
+               border: 1px solid {NAVY}; white-space: nowrap; vertical-align: bottom; }}
+table.c-t td {{ padding: 4px 9px; border: 1px solid {RULE}; font-weight: 400; color: {INK}; }}
 table.c-t td.num, table.c-t th.num {{ text-align: right; }}
-table.c-t tr.c-total td {{ font-weight: 600; border-top: 1px solid {INK}; }}
-table.c-t tr.c-section td {{ color: {MUTED} !important; font-weight: 600; font-size: 11.5px; text-transform: uppercase;
-    letter-spacing: 0.05em; padding-top: 16px; background: transparent !important; }}
+table.c-t tr.c-total td {{ font-weight: 700; }}
+table.c-t tr.c-section td {{ background: #eeeeee; font-weight: 700; }}
 table.c-kv {{ white-space: normal; }}
-table.c-kv td {{ padding: 7px 0; }}
-table.c-kv td:first-child {{ color: {MUTED}; width: 58%; padding-right: 12px; }}
-table.c-kv td:last-child {{ text-align: right; font-weight: 500; }}
-.c-evtype {{ font-weight: 600; color: {INK}; margin: 16px 0 4px 0; font-size: 13px; }}
+table.c-kv td:first-child {{ font-weight: 700; width: 55%; }}
+table.c-kv td:last-child {{ text-align: left; }}
+table.c-kv {{ width: 100%; }}
+.c-evtype {{ font-weight: 700; color: {INK}; margin: 12px 0 4px 0; font-size: 13px; }}
 
 /* text and links */
-.c-red, a.c-red, .stApp a.c-red {{ color: {INK} !important; font-weight: 500; text-decoration: none; }}
-a.c-red {{ color: {ACCENT} !important; }}
-a.c-red:hover {{ text-decoration: underline !important; }}
-.c-pos {{ color: {POS}; }}
+.c-red, a.c-red, .stApp a.c-red {{ color: {ACCENT} !important; font-weight: 400; text-decoration: underline; }}
+.c-pos {{ color: {INK}; }}
 .c-neg {{ color: {RED}; }}
-.c-hyp {{ color: {GOLD}; }}
-.c-muted {{ font-family: {FONT}; color: {MUTED}; font-size: 14px; line-height: 1.55; }}
-.c-title {{ font-family: {FONT}; color: {INK}; font-size: 26px; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.02em; }}
-.c-desc {{ font-family: {FONT}; color: {MUTED}; font-size: 14px; line-height: 1.6; max-width: 900px; margin-bottom: 18px; }}
-.c-sub {{ font-family: {FONT}; color: {INK}; font-size: 16px; font-weight: 600; margin: 22px 0 12px; letter-spacing: -0.01em; }}
-.c-statetitle {{ font-family: {FONT}; color: {INK}; font-weight: 600; font-size: 15px; margin: 4px 0 12px; }}
-.c-statetitle a {{ color: {INK} !important; }}
+.c-hyp {{ color: {RED}; }}
+.c-muted {{ font-family: {FONT}; color: {MUTED}; font-size: 13px; line-height: 1.45; }}
+.c-title {{ font-family: {FONT}; color: {INK}; font-size: 22px; font-weight: 700; margin: 0 0 4px; }}
+.c-desc {{ font-family: {FONT}; color: {INK}; font-size: 13px; line-height: 1.5; max-width: 980px; margin-bottom: 14px; }}
+.c-sub {{ font-family: {FONT}; color: {INK}; font-size: 16px; font-weight: 700; margin: 24px 0 8px; border-bottom: 1px solid {INK};
+         padding-bottom: 3px; }}
+.c-statetitle {{ font-family: {FONT}; color: {INK}; font-weight: 700; font-size: 14px; margin: 4px 0 8px; }}
+.c-statetitle a {{ color: {ACCENT} !important; }}
 
-/* metric tiles */
-.c-tiles {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin: 4px 0 18px; background: #fff;
-           border: 1px solid {RULE}; border-radius: 12px; overflow: hidden; }}
-@media (min-width: 1500px) {{ .c-tiles {{ grid-template-columns: repeat(8, 1fr); }} }}
-.c-tile {{ font-family: {FONT}; padding: 14px 16px 15px; min-width: 0; border-right: 1px solid {HAIR};
-          border-bottom: 1px solid {HAIR}; }}
-.c-tile .lbl {{ color: {MUTED}; font-size: 12px; line-height: 1.35; min-height: 32px; }}
-.c-tile .val {{ color: {INK}; font-size: 21px; font-weight: 600; margin-top: 4px; letter-spacing: -0.02em;
-               white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
-
-/* comparison headline cards */
-.c-heads {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin: 4px 0 18px; }}
-.c-head {{ font-family: {FONT}; background: #fff; border: 1px solid {RULE}; border-radius: 12px; padding: 16px 20px 18px; }}
-.c-head .lbl {{ color: {MUTED}; font-size: 12.5px; }}
-.c-head .lbl b {{ color: {INK}; font-weight: 600; }}
-.c-head .val {{ font-size: 30px; font-weight: 600; letter-spacing: -0.025em; margin: 6px 0 2px; color: {INK}; }}
-.c-head .val.pos {{ color: {POS}; }}
+/* metric strips: plain key-value tables */
+.c-tiles {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 0 28px; margin: 4px 0 14px; }}
+.c-tile {{ font-family: {FONT}; display: flex; justify-content: space-between; gap: 10px; padding: 3px 0;
+          border-bottom: 1px solid {HAIR}; min-width: 0; }}
+.c-tile .lbl {{ color: {INK}; font-size: 13px; }}
+.c-tile .val {{ color: {INK}; font-size: 13px; font-weight: 700; white-space: nowrap; }}
+.c-heads {{ margin: 4px 0 14px; }}
+.c-head {{ font-family: {FONT}; font-size: 13px; padding: 2px 0; }}
+.c-head .lbl {{ display: inline; color: {INK}; }}
+.c-head .lbl b {{ font-weight: 700; }}
+.c-head .val {{ display: inline; font-size: 13px; font-weight: 700; margin: 0 6px; color: {INK}; }}
 .c-head .val.neg {{ color: {RED}; }}
-.c-head .sub {{ color: {MUTED}; font-size: 12.5px; }}
-.c-pill {{ display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; margin-left: 6px;
-          vertical-align: middle; }}
-.c-pill.pos {{ background: #ecfdf5; color: {POS}; }}
-.c-pill.neg {{ background: #fef2f2; color: {RED}; }}
-/* graph shortcuts (one-page comparison) */
-.c-shortcuts {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px 24px;
-               background: #fff; border: 1px solid {RULE}; border-radius: 12px; padding: 14px 18px 16px; margin: 6px 0 18px; }}
-.c-sc-group {{ break-inside: avoid; }}
-.c-sc-title {{ font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: {FAINT}; font-weight: 600;
-              margin: 6px 0 4px; }}
-.c-shortcuts a {{ display: block; font-size: 13px; color: {ACCENT}; text-decoration: none; line-height: 1.6; }}
-.c-shortcuts a:hover {{ text-decoration: underline; }}
-.c-anchor {{ position: relative; top: -70px; height: 0; }}
-/* legacy summary box */
-.c-summary {{ font-family: {FONT}; background: #fff; border: 1px solid {RULE}; border-radius: 12px;
-             padding: 16px 20px; margin-bottom: 18px; font-size: 13px; color: {MUTED}; }}
-.c-summary .val {{ font-size: 26px; font-weight: 600; color: {INK}; margin-top: 4px; }}
-.c-summary .sub {{ color: {MUTED}; font-size: 12.5px; margin-top: 2px; }}
+.c-head .sub {{ display: inline; color: {MUTED}; font-size: 13px; }}
+.c-pill {{ display: inline; font-size: 13px; font-weight: 400; padding: 0; margin-left: 4px; }}
+.c-pill.pos {{ color: {INK}; }}
+.c-pill.neg {{ color: {RED}; }}
+.c-summary {{ font-family: {FONT}; font-size: 13px; color: {INK}; margin-bottom: 14px; }}
+.c-summary .val {{ font-size: 13px; font-weight: 700; display: inline; margin: 0 6px; }}
+.c-summary .sub {{ display: inline; color: {MUTED}; }}
+
+/* graph shortcuts */
+.c-shortcuts {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 4px 22px; margin: 6px 0 16px; }}
+.c-sc-title {{ font-size: 12px; color: {INK}; font-weight: 700; margin: 6px 0 2px; }}
+.c-shortcuts a {{ display: block; font-size: 13px; color: {ACCENT}; text-decoration: underline; line-height: 1.5; }}
+.c-anchor {{ position: relative; top: -60px; height: 0; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -283,7 +263,8 @@ def table(headers: list, rows: list, num_cols=frozenset(), kv: bool = False, row
 
 
 def card(title: str, inner_html: str, target=None) -> None:
-    (target or st).markdown(f'<div class="c-card"><h4>{esc(title)}</h4>{inner_html}</div>', unsafe_allow_html=True)
+    head = f"<h4>{esc(title)}</h4>" if title else ""
+    (target or st).markdown(f'<div class="c-card">{head}{inner_html}</div>', unsafe_allow_html=True)
 
 
 def page_title(title: str, description: str = "") -> None:
