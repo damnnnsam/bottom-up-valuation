@@ -86,6 +86,26 @@ def link(text: str, **params) -> str:
     return f'<a class="c-red" href="{href(**params)}" target="_self" style="text-decoration:none">{esc(text)}</a>'
 
 
+def nav_link(text: str, **params) -> str:
+    return f'<a class="c-nav" href="{href(**params)}" target="_self">{esc(text)}</a>'
+
+
+def crumbs(parts: list, modes: list | None = None) -> None:
+    """Path at the top of a page: [(text, params or None)], last one is the current page (no link).
+    modes: [(label, params, active)] shown on the right as page tabs (Report / Live / Tables)."""
+    out = []
+    for i, (text, params) in enumerate(parts):
+        last = i == len(parts) - 1
+        out.append(f'<span class="cur">{esc(text)}</span>' if last or params is None
+                   else f'<a href="{href(**params)}" target="_self">{esc(text)}</a>')
+    html = '<div class="c-crumbs"><div class="path">' + ' <span class="sep">›</span> '.join(out) + "</div>"
+    if modes:
+        html += '<div class="modes">' + "".join(
+            f'<span class="on">{esc(l)}</span>' if on else f'<a href="{href(**pr)}" target="_self">{esc(l)}</a>'
+            for l, pr, on in modes) + "</div>"
+    st.markdown(html + "</div>", unsafe_allow_html=True)
+
+
 def go_to(**params) -> None:
     key = st.query_params.get("key")
     st.query_params.clear()
@@ -545,18 +565,24 @@ def section_nav(key: str, default: str = "Overview") -> str:
     return sec or default
 
 
+def state_modes(client: str, sid: str, current: str) -> list:
+    return [("Report", dict(client=client, state=sid), current == "report"),
+            ("Live", dict(client=client, state=sid, live=1), current == "live"),
+            ("Tables", dict(client=client, state=sid, edit=1), current == "edit")]
+
+
 def render_state(client: str, s: State, share: bool) -> None:
+    if not share:
+        meta = load_client_meta(client)
+        crumbs([(meta.name if meta else client, dict(client=client)), (s.title, None)],
+               state_modes(client, s.id, "report"))
     page_title(s.title, s.description)
     T = int(s.time_span)
-    c1, c2, c3, c4 = st.columns([1.2, 1, 1, 3])
+    c1, c2, c3 = st.columns([1.2, 1, 4])
     at = c1.number_input("Metrics at day", 0, T - 1, T - 1, step=30, key=f"at_{s.id}")
     r, k, v = run(s, int(at))
-    if not share:
-        if c2.button("Live", key=f"lv_{s.id}", type="primary", help="All inputs on the left, results update as you type"):
-            go_to(client=client, state=s.id, live=1)
-        if c4.button("Tables", key=f"e_{s.id}"):
-            go_to(client=client, state=s.id, edit=1)
-        if c3.button("Share link", key=f"sh_{s.id}"):
+    if not share and not st.session_state.get("_scope"):
+        if c2.button("Share link", key=f"sh_{s.id}"):
             st.session_state[f"show_share_{s.id}"] = True
         if st.session_state.get(f"show_share_{s.id}"):
             st.code(share_url(client, state=s.id), language=None)
@@ -661,8 +687,10 @@ def render_editor(client: str, sid: str) -> None:
     base = state_from_dict(st.session_state[f"draft_{sid}"])
     k = f"{sid}_{_ver(sid)}"
 
-    page_title("Edit State", "")
-    st.markdown(f'<div class="c-statetitle">{link(base.title, client=client, state=sid)}</div>', unsafe_allow_html=True)
+    meta = load_client_meta(client)
+    crumbs([(meta.name if meta else client, dict(client=client)), (base.title, dict(client=client, state=sid)),
+            ("Tables", None)], state_modes(client, sid, "edit"))
+    page_title(base.title, "")
 
     left, right = st.columns([3, 1.25], gap="large")
     with left:
@@ -1115,6 +1143,9 @@ def render_comparison(client: str, comp: Comparison, share: bool) -> None:
     outs = [run(s) for s in states]
     short = short_names([s.title for s in states])
     named = [(nm, o[0]) for nm, o in zip(short, outs)]
+    if not share:
+        meta = load_client_meta(client)
+        crumbs([(meta.name if meta else client, dict(client=client)), (comp.title, None)])
     page_title(comp.title, comp.description)
     day = int(comp.compare_day)
 
@@ -1246,7 +1277,8 @@ def render_home(client: str) -> None:
         rows.append([link(s.title, client=client, state=s.id), len(s.offers), len(s.events), len(s.expenses),
                      money(v.dcf_cumulative), money(k.cac_blended),
                      f"{k.ltv_cac_ratio:,.2f}" if np.isfinite(k.ltv_cac_ratio) else "–", money(k.cash_needed),
-                     days(k.time_to_profitability_days), link("Live", client=client, state=s.id, live=1)])
+                     days(k.time_to_profitability_days),
+                     link("Live", client=client, state=s.id, live=1) + " &nbsp; " + link("Tables", client=client, state=s.id, edit=1)])
     card("States", table(["Title", "Offers", "Events", "Expenses", "Total DCF After Tax", "CAC", "LTV : CAC",
                           "Cash Needed", "Time To Profitability", ""], rows, num_cols={1, 2, 3, 4, 5, 6, 7})
          if rows else '<div class="c-muted">No states yet.</div>')
@@ -1276,19 +1308,14 @@ def sidebar(client: str | None) -> str | None:
     pick = st.sidebar.selectbox("Client", slugs, idx, format_func=lambda s: names.get(s, s), key="mdl_client")
     if pick != client:
         go_to(client=pick)
-    if st.sidebar.button("Client home", key="nav_home"):
-        go_to(client=pick)
+    st.sidebar.markdown(nav_link("Overview", client=pick), unsafe_allow_html=True)
     comps, states = list_comparisons(pick), list_states(pick)
     if comps:
         st.sidebar.caption("Comparisons")
-        for c in comps:
-            if st.sidebar.button(c.title, key=f"nc_{c.id}"):
-                go_to(client=pick, comparison=c.id)
+        st.sidebar.markdown("".join(nav_link(c.title, client=pick, comparison=c.id) for c in comps), unsafe_allow_html=True)
     if states:
         st.sidebar.caption("States")
-        for s in states:
-            if st.sidebar.button(s.title, key=f"ns_{s.id}"):
-                go_to(client=pick, state=s.id)
+        st.sidebar.markdown("".join(nav_link(s.title, client=pick, state=s.id) for s in states), unsafe_allow_html=True)
     st.sidebar.write("")
     with st.sidebar.expander("New state"):
         t = st.text_input("Title", "New State", key="new_s_t")
@@ -1452,14 +1479,9 @@ def render_live(client: str, sid: str) -> None:
                 '[data-testid="stSidebar"] [data-testid="stNumberInput"] label p{font-size:12px !important}'
                 '[data-testid="stSidebar"] .stNumberInput{margin-bottom:-6px}</style>', unsafe_allow_html=True)
 
-    sb.markdown(f'<div class="c-statetitle" style="margin-top:-8px">{esc(cur.title)}</div>', unsafe_allow_html=True)
-    nav = sb.columns(3)
-    if nav[0].button("Report", key=f"{k}_rep"):
-        go_to(client=client, state=sid)
-    if nav[1].button("Tables", key=f"{k}_tab", help="The full editor with every field as a table"):
-        go_to(client=client, state=sid, edit=1)
-    if nav[2].button("Client", key=f"{k}_home"):
-        go_to(client=client)
+    meta = load_client_meta(client)
+    sb.markdown(nav_link("‹ " + (meta.name if meta else client), client=client)
+                + f'<div class="c-statetitle" style="margin:2px 0 8px">{esc(cur.title)}</div>', unsafe_allow_html=True)
 
     # Offers
     with sb.expander("1. Offer", expanded=True):
@@ -1647,6 +1669,8 @@ def render_live(client: str, sid: str) -> None:
     st.session_state[f"draft_{sid}"] = state_to_dict(cur)
 
     # ── Results ──
+    crumbs([(meta.name if meta else client, dict(client=client)), (cur.title, dict(client=client, state=sid)),
+            ("Live", None)], state_modes(client, sid, "live"))
     page_title(cur.title, cur.description)
     r, kp, v = run(cur)
     r0, k0, v0 = run(saved)
@@ -1716,19 +1740,14 @@ def _guest_sidebar(slug: str) -> str:
     if st.query_params.get("client") != slug:
         go_to(client=slug)
     st.sidebar.markdown(f"**{esc(meta.name if meta else slug)}**")
-    if st.sidebar.button("Overview", key="g_home"):
-        go_to(client=slug)
+    st.sidebar.markdown(nav_link("Overview", client=slug), unsafe_allow_html=True)
     comps, states = list_comparisons(slug), list_states(slug)
     if comps:
         st.sidebar.caption("Comparisons")
-        for c in comps:
-            if st.sidebar.button(c.title, key=f"gc_{c.id}"):
-                go_to(client=slug, comparison=c.id)
+        st.sidebar.markdown("".join(nav_link(c.title, client=slug, comparison=c.id) for c in comps), unsafe_allow_html=True)
     if states:
         st.sidebar.caption("States")
-        for s_ in states:
-            if st.sidebar.button(s_.title, key=f"gs_{s_.id}"):
-                go_to(client=slug, state=s_.id, live=1)
+        st.sidebar.markdown("".join(nav_link(s_.title, client=slug, state=s_.id, live=1) for s_ in states), unsafe_allow_html=True)
     st.sidebar.write("")
     with st.sidebar.expander("New state"):
         t = st.text_input("Title", "New State", key="g_new_t")

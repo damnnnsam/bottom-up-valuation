@@ -158,6 +158,16 @@ a.c-red, .stApp a.c-red {{ color: {ACCENT} !important; font-weight: 400; text-de
 .c-summary .sub {{ display: inline; color: {MUTED}; }}
 
 .c-ask {{ font-family: {FONT}; font-size: 12.5px; line-height: 1.5; color: {MUTED}; margin: 0 0 8px; }}
+/* navigation */
+.c-nav {{ display: block; font-family: {FONT}; font-size: 13px; color: {ACCENT}; text-decoration: underline; line-height: 1.5;
+         margin: 1px 0; }}
+.c-crumbs {{ display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap;
+            font-family: {FONT}; font-size: 13px; margin: -6px 0 14px; padding-bottom: 8px; border-bottom: 1px solid {RULE}; }}
+.c-crumbs a {{ color: {ACCENT}; text-decoration: underline; }}
+.c-crumbs .sep {{ color: {FAINT}; margin: 0 2px; }}
+.c-crumbs .cur {{ color: {INK}; }}
+.c-crumbs .modes a, .c-crumbs .modes .on {{ margin-left: 14px; }}
+.c-crumbs .modes .on {{ color: {INK}; font-weight: 700; }}
 /* graph shortcuts */
 .c-shortcuts {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 4px 22px; margin: 6px 0 16px; }}
 .c-sc-title {{ font-size: 12px; color: {INK}; font-weight: 700; margin: 6px 0 2px; }}
