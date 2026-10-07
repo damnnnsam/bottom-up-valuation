@@ -1456,8 +1456,8 @@ def render_live(client: str, sid: str) -> None:
         go_to(client=client)
 
     # Offers
-    with sb.expander("1 · Offer", expanded=True):
-        st.caption('Ask: What do you sell and at what price? Monthly or annual? Of 10 new customers, how many are gone after the first period, and how many leave per period after that? What does delivering it cost, as a share of the price? Sales commission? How fast do you get paid?')
+    with sb.expander("1. Offer", expanded=True):
+        st.markdown('<div class="c-ask">What do you sell, and at what price?<br>Billed monthly or yearly?<br>Of 10 new customers, how many are gone after the first period? How many leave per period after that?<br>What does delivery cost, as a share of price?<br>Sales commission?<br>How many days until the money is in?</div>', unsafe_allow_html=True)
         for j, o in enumerate(cur.offers):
             st.markdown(f"**{esc(o.name)}**")
             if o.billing == "schedule":
@@ -1479,8 +1479,8 @@ def render_live(client: str, sid: str) -> None:
                 o.renewal_cost_to_fulfill = o.cost_to_fulfill
 
     # Starting state
-    with sb.expander("2 · Today", expanded=False):
-        st.caption('Ask: How many paying customers today, on which offer? Cash in the bank? Any debt? Payment provider fee?')
+    with sb.expander("2. Today", expanded=False):
+        st.markdown('<div class="c-ask">Paying customers today, by plan?<br>Cash in the bank?<br>Debt?<br>Payment provider fee?</div>', unsafe_allow_html=True)
         book = existing_book(cur)
         def _set(attr):
             return lambda v: setattr(cur, attr, v)
@@ -1503,8 +1503,8 @@ def render_live(client: str, sid: str) -> None:
         cur.existing_customers_offer = max(cur.existing_by_offer, key=cur.existing_by_offer.get) if cur.existing_by_offer else ""
 
     # Fixed costs
-    with sb.expander("3 · Fixed costs", expanded=False):
-        st.caption('Ask: What does the business cost per month before marketing: team, rent, tools? Mark growth and sales people as sales & marketing. Does it grow with customers (support, account managers)?')
+    with sb.expander("3. Fixed costs", expanded=False):
+        st.markdown('<div class="c-ask">Monthly cost before marketing: team, rent, tools?<br>Which of those people do growth or sales? Tick Sales & Marketing for them.<br>What grows with the customer count?</div>', unsafe_allow_html=True)
         remove = None
         for i, x in enumerate(cur.expenses):
             box = st.container(border=True)
@@ -1533,8 +1533,8 @@ def render_live(client: str, sid: str) -> None:
 
     # Marketing channels
     offer_names = [o.name for o in cur.offers]
-    with sb.expander("4 · Channels", expanded=True):
-        st.caption('Ask per channel: When does it start? Paid: budget per month, CPM (or cost per click), click-through rate, % of clicks that become a lead, % of leads that buy. Outbound: contacts per month, cost, % of contacts that become a lead, % of leads that buy. Days from first touch to closed deal. Measured or a guess? Tick Validated only if measured.')
+    with sb.expander("4. Channels", expanded=True):
+        st.markdown('<div class="c-ask">For each channel: start day, and the numbers below.<br>Paid: budget per month, CPM or cost per click, click rate, clicks to leads, leads to customers.<br>Outbound: contacts per month, cost, contacts to leads, leads to customers.<br>Days from first touch to closed deal.<br>Tick Validated only for measured numbers.</div>', unsafe_allow_html=True)
         remove = None
         for i, e in enumerate(cur.events):
             spec = next((t for t in CHANNEL_TYPES if t[0] == e.driver), None)
@@ -1553,11 +1553,11 @@ def render_live(client: str, sid: str) -> None:
             items += [("Time to market (days)", e.time_to_market, "int", f"{k}_ettm_{i}", _se("time_to_market")),
                       ("Sales cycle (days)", e.sales_cycle_days, "int", f"{k}_esc_{i}", _se("sales_cycle_days"))]
             _pairs(box, items)
-            e.validated = box.checkbox("Validated (measured, not assumed)", e.validated, key=f"{k}_ev_{i}")
+            e.validated = box.checkbox("Validated", e.validated, key=f"{k}_ev_{i}", help="Tick when these numbers are measured, not assumed.")
         if remove is not None:
             cur.events.pop(remove)
             _set_draft(sid, cur)
-        st.caption("Add a channel")
+        st.markdown("**Add a channel**")
         a = st.columns([3, 3, 2])
         kind = a[0].selectbox("Type", list(LIVE_NEW_ROWS), format_func=lambda x: LIVE_NEW_ROWS[x][0],
                               key=f"{k}_addk", label_visibility="collapsed")
@@ -1574,8 +1574,8 @@ def render_live(client: str, sid: str) -> None:
             _set_draft(sid, cur)
 
     # Targets
-    with sb.expander("5 · Targets", expanded=False):
-        st.caption("Ask: How fast must a new customer pay back what it cost to win them? How many new customers a month do you want? These set the max cost per customer, lead, click and contact on the right.")
+    with sb.expander("5. Targets", expanded=False):
+        st.markdown('<div class="c-ask">How many months to earn a customer\'s cost back?<br>How many new customers a month do you want?</div>', unsafe_allow_html=True)
         _pairs(st, [("Payback target (months)", cur.target_payback_months, "num", f"{k}_tpm",
                      lambda v: setattr(cur, "target_payback_months", v)),
                     ("LTV : CAC target", cur.target_ltv_cac, "num", f"{k}_tlc", lambda v: setattr(cur, "target_ltv_cac", v)),
@@ -1584,7 +1584,7 @@ def render_live(client: str, sid: str) -> None:
 
     # Upgrades
     if cur.upgrades:
-        with sb.expander("Optional · Upgrades between offers", expanded=False):
+        with sb.expander("Upgrades between plans (optional)", expanded=False):
             items = []
             for i, u in enumerate(cur.upgrades):
                 items.append((f"{u.from_offer} → {u.to_offer} per month", u.monthly_rate, "pct", f"{k}_u_{i}",
@@ -1592,7 +1592,7 @@ def render_live(client: str, sid: str) -> None:
             _pairs(st, items)
 
     # Financing
-    with sb.expander("Optional · Financing", expanded=False):
+    with sb.expander("Financing (optional)", expanded=False):
         remove = None
         for i, f in enumerate(cur.financing):
             box = st.container(border=True)
@@ -1624,7 +1624,7 @@ def render_live(client: str, sid: str) -> None:
             _set_draft(sid, cur)
 
     # Valuation
-    with sb.expander("Optional · Valuation settings", expanded=False):
+    with sb.expander("Valuation settings (optional)", expanded=False):
         def _set(attr):
             return lambda v: setattr(cur, attr, v)
         _pairs(st, [("Days simulated", cur.time_span, "int", f"{k}_ts", _set("time_span")),
@@ -1742,8 +1742,7 @@ def _guest_sidebar(slug: str) -> str:
             save_comparison(slug, c)
             go_to(client=slug, comparison=c.id)
     st.sidebar.write("")
-    st.sidebar.caption("Your changes are saved to this model. Every state's Live page shows the inputs on the left; "
-                       "the value, cash and targets on the right update as you type.")
+    st.sidebar.caption("Change any input on the left. The results update as you type. Save keeps the change.")
     return slug
 
 

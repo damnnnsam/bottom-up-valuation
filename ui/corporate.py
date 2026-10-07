@@ -156,6 +156,7 @@ table.c-kv {{ width: 100%; }}
 .c-summary .val {{ font-size: 13px; font-weight: 700; display: inline; margin: 0 6px; }}
 .c-summary .sub {{ display: inline; color: {MUTED}; }}
 
+.c-ask {{ font-family: {FONT}; font-size: 12.5px; line-height: 1.5; color: {MUTED}; margin: 0 0 8px; }}
 /* graph shortcuts */
 .c-shortcuts {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 4px 22px; margin: 6px 0 16px; }}
 .c-sc-title {{ font-size: 12px; color: {INK}; font-weight: 700; margin: 6px 0 2px; }}
