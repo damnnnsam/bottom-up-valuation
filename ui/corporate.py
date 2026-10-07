@@ -290,9 +290,25 @@ def chart(fig: go.Figure, title: str, height: int = 360, ytitle: str = "", money
           key: str | None = None, xtitle: str = "Days", zero: bool = False) -> None:
     # Legend sits in its own band under the title; the band grows with the number of legend rows,
     # so long or many labels never run over the title or the plot.
+    is_pct = bool(fig.layout.yaxis.ticksuffix == "%")
     for tr in fig.data:
         if isinstance(tr, go.Scatter) and tr.line is not None and tr.line.width and tr.line.width > 2:
             tr.line.width = 2
+        if getattr(tr, "hovertemplate", None) in (None, ""):
+            # plain numbers on hover: $1,234,567 / 173.64 / 12.3%, never "173.636m" (SI milli)
+            if money_axis:
+                # "-$61,095", not "$-61,095": format the sign ourselves
+                import numpy as _np
+                y = _np.asarray(tr.y, dtype=float) if tr.y is not None else None
+                if y is not None:
+                    tr.customdata = _np.where(y < 0, "-$", "$")
+                    tr.hovertemplate = "%{fullData.name}: %{customdata}%{y:,.0f}<extra></extra>"
+                    tr.y = _np.abs(y) if False else y  # keep y; the sign is shown through customdata
+                    tr.hovertemplate = "%{fullData.name}: %{customdata}%{text}<extra></extra>"
+                    tr.text = [f"{abs(v):,.0f}" for v in y]
+            else:
+                fmt = "%{y:,.1f}%" if is_pct else "%{y:,.2f}"
+                tr.hovertemplate = f"%{{fullData.name}}: {fmt}<extra></extra>"
     names = [t.name for t in fig.data if t.name and t.showlegend is not False]
     rows = 0
     if len(names) > 1:
@@ -314,9 +330,9 @@ def chart(fig: go.Figure, title: str, height: int = 360, ytitle: str = "", money
         legend=dict(orientation="h", yref="container", yanchor="top", y=1 - title_px / height, x=0.0, xanchor="left",
                     font=dict(size=12, color=INK_2), itemwidth=30, bgcolor="rgba(0,0,0,0)") if rows else dict(),
         xaxis=dict(title=dict(text=xtitle, font=dict(size=11, color=FAINT)), gridcolor=HAIR, automargin=True,
-                   showline=False, zeroline=False),
+                   showline=False, zeroline=False, hoverformat=","),
         yaxis=dict(title=None if money_axis else (ytitle or None), tickprefix="$" if money_axis else "",
-                   gridcolor=HAIR, automargin=True, separatethousands=True, zeroline=False, tickformat="~s",
+                   gridcolor=HAIR, automargin=True, separatethousands=True, zeroline=False, tickformat="~s" if money_axis else ",~r",
                    **({"rangemode": "tozero"} if zero else {})),
     )
     st.plotly_chart(fig, theme=None, key=key, config={"displayModeBar": False})
