@@ -78,7 +78,15 @@ def compute_state_kpis(state: State, r: StateResult, at_day: int | None = None) 
     end = T if at_day is None else max(1, min(int(at_day) + 1, T))
     s30 = max(0, end - 30)
 
-    new_total = float(r.new_customers_total[:end].sum())
+    # Free offers (price 0) are not customers for CAC, payback or LTV: count paying offers only
+    paying = {o.name for o in state.offers if (o.price > 0 or (o.billing != "contract" and any(a > 0 for _, a in (o.payments or []))))}
+    has_free = len(paying) < len(state.offers)
+    sbo_all = r.sales_by_offer or {}
+    if has_free and sbo_all:
+        new_paying = sum(sbo_all[n] for n in sbo_all if n in paying)
+    else:
+        new_paying = r.new_customers_total
+    new_total = float(new_paying[:end].sum())
     acq_direct = float(r.cost_marketing[:end].sum() + r.cost_sales[:end].sum())
     cac_direct_cum = acq_direct / max(new_total, 1.0)
 
@@ -91,7 +99,7 @@ def compute_state_kpis(state: State, r: StateResult, at_day: int | None = None) 
                             for ev, sv in zip(state.events, r.event_sales)) / tot_s)) if tot_s > 0 else 0
     w = min(365, end)
     n0 = end - w
-    new_win = float(r.new_customers_total[n0:end].sum())
+    new_win = float(new_paying[n0:end].sum())
     s0, s1 = max(0, n0 - lag), max(0, end - lag)
     fixed_sm = r.cost_fixed_sm if r.cost_fixed_sm is not None else np.zeros(T)
     sell_new = r.cost_sales_new if r.cost_sales_new is not None else r.cost_sales
@@ -102,7 +110,8 @@ def compute_state_kpis(state: State, r: StateResult, at_day: int | None = None) 
     for ev, sales, cost in zip(state.events, r.event_sales, r.event_cost):
         c = by_channel.setdefault(ev.channel, [0.0, 0.0])
         c[0] += float(cost[:end].sum())
-        c[1] += float(sales[:end].sum())
+        paid_share = sum(sh for n, sh in event_mix(ev).items() if n in paying) if has_free else 1.0
+        c[1] += float(sales[:end].sum()) * paid_share
     cac_by_channel = {k: (v[0] / v[1] if v[1] > 0 else float("nan")) for k, v in by_channel.items()}
 
     # Sales-weighted offer economics
@@ -111,6 +120,8 @@ def compute_state_kpis(state: State, r: StateResult, at_day: int | None = None) 
     weights: dict = {}
     for ev, sales in zip(state.events, r.event_sales):
         for oname, share in event_mix(ev).items():
+            if has_free and oname not in paying:
+                continue
             weights[oname] = weights.get(oname, 0.0) + share * float(sales[:end].sum())
     wsum = sum(weights.values())
     if wsum > 0:
@@ -204,8 +215,10 @@ def compute_state_kpis(state: State, r: StateResult, at_day: int | None = None) 
         gross_margin=pct(gp30), ebitda_margin=pct(eb30), net_margin=pct(ni30),
         monthly_revenue=float(r.revenue_total[s30:end].sum()), monthly_cash_collected=rev30,
         monthly_fcf=float(r.free_cash_flow[s30:end].sum()),
-        monthly_new_customers=float(r.new_customers_total[s30:end].sum()),
-        total_customers=float(r.cumulative_customers[end - 1]), active_customers=active_end,
+        monthly_new_customers=float(new_paying[s30:end].sum()),
+        total_customers=float(r.cumulative_customers[end - 1]) if not has_free else float(new_paying[:end].sum()) + sum(
+            float(v_) for k_, v_ in (state.existing_by_offer or {}).items() if k_ in paying),
+        active_customers=active_end if not has_free else float(sum(r.active_by_offer[n][end - 1] for n in paying if n in r.active_by_offer)),
         profit_per_customer_per_month=ppcm, k_value=k_value,
         cash_needed=max(-float(cash.min()), state.upfront_investment, 0.0),
         cash_consumption=abs(min(float(cash.min()), 0.0)),

@@ -54,6 +54,28 @@ def _get_data_root() -> Path:
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 if not dst.exists() or dst.read_text() != meta.read_text():
                     dst.write_text(meta.read_text())
+            # A client folder with a .revision file is published from the repo: when the revision changes,
+            # its states and comparisons replace the volume's copies. The volume's previous copies are kept in
+            # .backup-<old revision>/ so edits made on the live site are never lost.
+            import shutil
+            for rev in _REPO_ROOT.glob("*/.revision"):
+                client_dir = root / rev.parent.name
+                cur = client_dir / ".revision"
+                new_rev = rev.read_text().strip()
+                if cur.exists() and cur.read_text().strip() == new_rev:
+                    continue
+                old_rev = cur.read_text().strip() if cur.exists() else "initial"
+                backup = client_dir / f".backup-{old_rev}"
+                for sub in ("states", "comparisons"):
+                    src, dst = rev.parent / sub, client_dir / sub
+                    if dst.exists() and not (backup / sub).exists():
+                        shutil.copytree(dst, backup / sub)
+                    if src.exists():
+                        dst.mkdir(parents=True, exist_ok=True)
+                        for f in src.glob("*.json"):
+                            (dst / f.name).write_text(f.read_text())
+                client_dir.mkdir(parents=True, exist_ok=True)
+                cur.write_text(new_rev)
     return root
 
 
