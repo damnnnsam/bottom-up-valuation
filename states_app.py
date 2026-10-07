@@ -76,6 +76,9 @@ def qp(name: str, default=None):
 
 
 def href(**params) -> str:
+    key = st.query_params.get("key")
+    if key and "key" not in params and not params.get("share"):
+        params["key"] = key  # a client's link carries its key, so every link on the page keeps it
     return "?" + "&".join(f"{k}={v}" for k, v in params.items() if v not in (None, ""))
 
 
@@ -84,7 +87,10 @@ def link(text: str, **params) -> str:
 
 
 def go_to(**params) -> None:
+    key = st.query_params.get("key")
     st.query_params.clear()
+    if key and "key" not in params:
+        params["key"] = key
     for k, v in params.items():
         if v not in (None, ""):
             st.query_params[k] = str(v)
@@ -1112,7 +1118,7 @@ def render_comparison(client: str, comp: Comparison, share: bool) -> None:
     page_title(comp.title, comp.description)
     day = int(comp.compare_day)
 
-    if not share:
+    if not share and not st.session_state.get("_scope"):
         with st.expander("Comparison settings"):
             c = st.columns(3)
             maxd = max(len(o[0].days) for o in outs) - 1

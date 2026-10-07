@@ -40,14 +40,13 @@ def _gate() -> None:
     if key:
         for slug, pw in guests.items():
             if pw and key == pw:
+                # the key stays in the URL: plain links reload the page, and the new page needs it again
                 st.session_state["_authed"] = True
                 st.session_state["_scope"] = slug
-                params = {k: v for k, v in st.query_params.to_dict().items() if k != "key"}
-                params["client"] = slug
-                st.query_params.clear()
-                for k, v in params.items():
-                    st.query_params[k] = v
-                st.rerun()
+                if st.query_params.get("client") != slug:
+                    st.query_params["client"] = slug
+                    st.rerun()
+                return
     st.markdown('<div style="max-width:360px;margin:12vh auto 0"><h3 style="margin-bottom:4px">Sign in</h3>'
                 '<p style="color:#555;font-size:13px">Enter the password you were given.</p></div>', unsafe_allow_html=True)
     _, c, _ = st.columns([1, 1.2, 1])
