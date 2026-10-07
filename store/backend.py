@@ -45,7 +45,19 @@ def _get_data_root() -> Path:
                 if item.is_dir() and not dst.exists():
                     shutil.copytree(item, dst)
         marker.write_text("seeded from repo")
+    if not _SYNCED.get(str(root)):
+        # client descriptions (meta.json) follow the repo; states and comparisons live on the volume
+        _SYNCED[str(root)] = True
+        if _REPO_ROOT.exists():
+            for meta in _REPO_ROOT.glob("*/meta.json"):
+                dst = root / meta.parent.name / "meta.json"
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                if not dst.exists() or dst.read_text() != meta.read_text():
+                    dst.write_text(meta.read_text())
     return root
+
+
+_SYNCED: dict = {}
 
 
 def _get_github_config() -> dict:
