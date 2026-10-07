@@ -296,16 +296,11 @@ def chart(fig: go.Figure, title: str, height: int = 360, ytitle: str = "", money
             tr.line.width = 2
         if getattr(tr, "hovertemplate", None) in (None, ""):
             # plain numbers on hover: $1,234,567 / 173.64 / 12.3%, never "173.636m" (SI milli)
-            if money_axis:
-                # "-$61,095", not "$-61,095": format the sign ourselves
-                import numpy as _np
-                y = _np.asarray(tr.y, dtype=float) if tr.y is not None else None
-                if y is not None:
-                    tr.customdata = _np.where(y < 0, "-$", "$")
-                    tr.hovertemplate = "%{fullData.name}: %{customdata}%{y:,.0f}<extra></extra>"
-                    tr.y = _np.abs(y) if False else y  # keep y; the sign is shown through customdata
-                    tr.hovertemplate = "%{fullData.name}: %{customdata}%{text}<extra></extra>"
-                    tr.text = [f"{abs(v):,.0f}" for v in y]
+            if money_axis and tr.y is not None:
+                # "-$61,095", not "$-61,095": the label is prepared per point
+                y = np.asarray(tr.y, dtype=float)
+                tr.customdata = [("-$" if v < 0 else "$") + f"{abs(v):,.0f}" for v in y]
+                tr.hovertemplate = "%{fullData.name}: %{customdata}<extra></extra>"
             else:
                 fmt = "%{y:,.1f}%" if is_pct else "%{y:,.2f}"
                 tr.hovertemplate = f"%{{fullData.name}}: {fmt}<extra></extra>"
