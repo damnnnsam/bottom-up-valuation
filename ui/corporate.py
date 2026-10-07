@@ -124,7 +124,8 @@ table.c-kv {{ width: 100%; }}
 .c-evtype {{ font-weight: 700; color: {INK}; margin: 12px 0 4px 0; font-size: 13px; }}
 
 /* text and links */
-.c-red, a.c-red, .stApp a.c-red {{ color: {ACCENT} !important; font-weight: 400; text-decoration: underline; }}
+span.c-red {{ color: {INK}; font-weight: 700; }}
+a.c-red, .stApp a.c-red {{ color: {ACCENT} !important; font-weight: 400; text-decoration: underline; }}
 .c-pos {{ color: {INK}; }}
 .c-neg {{ color: {RED}; }}
 .c-hyp {{ color: {RED}; }}
