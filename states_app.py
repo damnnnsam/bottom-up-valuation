@@ -1247,6 +1247,9 @@ def render_home(client: str) -> None:
 # ── Sidebar ───────────────────────────────────────────────────────────
 
 def sidebar(client: str | None) -> str | None:
+    scope = st.session_state.get("_scope")
+    if scope:
+        return _guest_sidebar(scope)
     clients = list_clients()
     slugs = [c for c, _ in clients]
     names = {c: m.name for c, m in clients}
@@ -1698,6 +1701,49 @@ def render_live(client: str, sid: str) -> None:
     card("Cash and Customers", cash, d)
 
 
+def _guest_sidebar(slug: str) -> str:
+    """A client's own login: their client only, no client switcher, Live first."""
+    meta = load_client_meta(slug)
+    if st.query_params.get("client") != slug:
+        go_to(client=slug)
+    st.sidebar.markdown(f"**{esc(meta.name if meta else slug)}**")
+    if st.sidebar.button("Overview", key="g_home"):
+        go_to(client=slug)
+    comps, states = list_comparisons(slug), list_states(slug)
+    if comps:
+        st.sidebar.caption("Comparisons")
+        for c in comps:
+            if st.sidebar.button(c.title, key=f"gc_{c.id}"):
+                go_to(client=slug, comparison=c.id)
+    if states:
+        st.sidebar.caption("States")
+        for s_ in states:
+            if st.sidebar.button(s_.title, key=f"gs_{s_.id}"):
+                go_to(client=slug, state=s_.id, live=1)
+    st.sidebar.write("")
+    with st.sidebar.expander("New state"):
+        t = st.text_input("Title", "New State", key="g_new_t")
+        src = st.selectbox("Start from", [s_.id for s_ in states] or ["blank"],
+                           format_func=lambda i: next((x.title for x in states if x.id == i), "Blank"), key="g_new_src")
+        if st.button("Create", key="g_new_go"):
+            base = next((x for x in states if x.id == src), None)
+            s_ = clone_state(base, t) if base else State(title=t)
+            save_state(slug, s_)
+            go_to(client=slug, state=s_.id, live=1)
+    with st.sidebar.expander("New comparison"):
+        t = st.text_input("Title", "New Comparison", key="g_new_ct")
+        opts = {s_.id: s_.title for s_ in states}
+        ch = st.multiselect("States (the first is the baseline)", list(opts), format_func=lambda i: opts[i], key="g_new_cs")
+        if st.button("Create", key="g_new_cgo") and ch:
+            c = Comparison(title=t, state_ids=ch)
+            save_comparison(slug, c)
+            go_to(client=slug, comparison=c.id)
+    st.sidebar.write("")
+    st.sidebar.caption("Your changes are saved to this model. Every state's Live page shows the inputs on the left; "
+                       "the value, cash and targets on the right update as you type.")
+    return slug
+
+
 # ── Main ──────────────────────────────────────────────────────────────
 
 share = qp("share") == "1"
@@ -1711,6 +1757,8 @@ elif qp("live") == "1" and qp("state"):
 else:
     client = sidebar(client)
 
+if client and st.session_state.get("_scope") and client != st.session_state["_scope"]:
+    go_to(client=st.session_state["_scope"])
 if client:
     if qp("comparison"):
         comp = load_comparison(client, qp("comparison"))

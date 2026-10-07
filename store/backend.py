@@ -25,9 +25,27 @@ def _is_streamlit_cloud() -> bool:
     return os.environ.get("STREAMLIT_SHARING_MODE") is not None
 
 
+_REPO_ROOT = Path(__file__).resolve().parent.parent / "data" / "clients"
+
+
 def _get_data_root() -> Path:
-    """Root directory for client data (local mode only)."""
-    return Path(__file__).resolve().parent.parent / "data" / "clients"
+    """Root directory for client data. DATA_DIR (e.g. a mounted volume) keeps edits across deploys;
+    it is filled from the repo's data/clients on first use."""
+    d = os.environ.get("DATA_DIR", "").strip()
+    if not d:
+        return _REPO_ROOT
+    root = Path(d)
+    marker = root / ".seeded"
+    if not marker.exists():
+        import shutil
+        root.mkdir(parents=True, exist_ok=True)
+        if _REPO_ROOT.exists():
+            for item in _REPO_ROOT.iterdir():
+                dst = root / item.name
+                if item.is_dir() and not dst.exists():
+                    shutil.copytree(item, dst)
+        marker.write_text("seeded from repo")
+    return root
 
 
 def _get_github_config() -> dict:
