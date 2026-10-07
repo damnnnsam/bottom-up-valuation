@@ -64,7 +64,12 @@ def inject_css() -> None:
 .stApp h4 {{ font-size: 15px !important; margin: 22px 0 4px; }}
 .stApp h5 {{ font-size: 13px !important; margin: 14px 0 2px; }}
 [data-testid="stCaptionContainer"] p {{ color: {MUTED} !important; font-size: 12px !important; }}
-[data-testid="stToolbar"], [data-testid="stDecoration"], [data-testid="stHeaderActionElements"] {{ display: none; }}
+[data-testid="stToolbarActions"], [data-testid="stAppDeployButton"], [data-testid="stDecoration"], [data-testid="stMainMenu"],
+[data-testid="stStatusWidget"] {{ display: none; }}
+[data-testid="stToolbar"] {{ background: transparent; }}
+/* keep the arrow that reopens a collapsed sidebar */
+[data-testid="stHeader"] {{ height: auto; min-height: 0; }}
+[data-testid="stExpandSidebarButton"] {{ background: #f4f4f4; border: 1px solid {RULE}; border-radius: 0; }}
 [data-testid="stHeader"] {{ background: transparent; }}
 .block-container {{ padding-top: 1.6rem; padding-bottom: 3rem; max-width: 100%; }}
 [data-testid="stNumberInputStepDown"], [data-testid="stNumberInputStepUp"] {{ display: none; }}
