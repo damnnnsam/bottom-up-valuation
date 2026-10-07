@@ -1209,8 +1209,11 @@ def render_comparison(client: str, comp: Comparison, share: bool) -> None:
                 unsafe_allow_html=True)
     mode = c2.segmented_control("Show as", G.MODES, default="Daily", key=f"cgm_{comp.id}",
                                 label_visibility="collapsed") or "Daily"
-    st.markdown(G.shortcuts_html(named), unsafe_allow_html=True)
-    G.render_all(named, mode, f"cg_{comp.id}", compare_day=day)
+    left, right = st.columns([1, 4.2], gap="medium")
+    with left:
+        st.markdown(G.shortcuts_html(named, sticky=True), unsafe_allow_html=True)
+    with right:
+        G.render_all(named, mode, f"cg_{comp.id}", compare_day=day)
     if msg:
         with st.expander("Message template"):
             st.text_area("Message", msg, height=100, key=f"msg_{comp.id}", label_visibility="collapsed")

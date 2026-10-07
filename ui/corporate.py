@@ -161,6 +161,14 @@ table.c-kv {{ width: 100%; }}
 .c-sc-title {{ font-size: 12px; color: {INK}; font-weight: 700; margin: 6px 0 2px; }}
 .c-shortcuts a {{ display: block; font-size: 13px; color: {ACCENT}; text-decoration: underline; line-height: 1.5; }}
 .c-anchor {{ position: relative; top: -60px; height: 0; }}
+/* sticky variant: one column, stays in view while the graphs scroll */
+.c-shortcuts.c-sticky {{ display: block; position: sticky; top: 8px; max-height: calc(100vh - 24px); overflow-y: auto;
+    margin: 0; padding-right: 6px; }}
+.c-shortcuts.c-sticky .c-sc-head {{ font-size: 15px; font-weight: 700; color: {INK}; margin: 0 0 6px; }}
+.c-shortcuts.c-sticky .c-sc-title {{ margin-top: 10px; }}
+.c-shortcuts.c-sticky a {{ font-size: 12.5px; line-height: 1.4; margin-bottom: 3px; }}
+[data-testid="stColumn"]:has(> div > div > div > .c-shortcuts.c-sticky),
+[data-testid="stColumn"]:has(.c-shortcuts.c-sticky) {{ align-self: flex-start; position: sticky; top: 0; }}
 </style>
 """, unsafe_allow_html=True)
 

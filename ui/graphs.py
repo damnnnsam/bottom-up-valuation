@@ -248,8 +248,9 @@ def _slug(key: str) -> str:
     return "g-" + key.replace("_", "-")
 
 
-def shortcuts_html(named: list) -> str:
-    """Anchor links to every graph on the page, grouped like the views."""
+def shortcuts_html(named: list, sticky: bool = False) -> str:
+    """Anchor links to every graph on the page, grouped like the views. sticky=True keeps the list in
+    view while the graphs scroll (one column on the left, as in the original tool)."""
     parts = []
     seen = set()
     for view, keys in VIEWS:
@@ -267,7 +268,9 @@ def shortcuts_html(named: list) -> str:
     if rest:
         parts.append('<div class="c-sc-group"><div class="c-sc-title">Other</div>'
                      + "".join(f'<a href="#{_slug(k)}">{SERIES[k][0]}</a>' for k in rest) + "</div>")
-    return '<div class="c-shortcuts">' + "".join(parts) + "</div>"
+    cls = "c-shortcuts c-sticky" if sticky else "c-shortcuts"
+    head = '<div class="c-sc-head">Graph Shortcuts</div>' if sticky else ""
+    return f'<div class="{cls}">' + head + "".join(parts) + "</div>"
 
 
 def _has_data(named: list, key: str) -> bool:
