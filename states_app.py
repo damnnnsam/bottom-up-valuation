@@ -1223,7 +1223,10 @@ def render_comparison(client: str, comp: Comparison, share: bool) -> None:
 
 def render_home(client: str) -> None:
     meta = load_client_meta(client)
-    page_title(meta.name if meta else client, (meta.notes if meta and getattr(meta, "notes", "") else ""))
+    notes = meta.notes if meta and getattr(meta, "notes", "") else ""
+    if st.session_state.get("_scope"):
+        notes = ""  # internal research notes stay with the admin view
+    page_title(meta.name if meta else client, notes)
     comps, states = list_comparisons(client), list_states(client)
 
     rows = [[link(c.title, client=client, comparison=c.id), len(c.state_ids), f"{c.compare_day:,}", esc(c.created)]
